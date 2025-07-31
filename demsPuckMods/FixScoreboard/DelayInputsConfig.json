@@ -1,0 +1,5 @@
+{
+  "ArtificialLatencyMs": 35.0,
+  "JitterMs": 5.0,
+  "OnlyInPracticeMode": true
+}
