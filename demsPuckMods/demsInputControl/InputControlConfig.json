@@ -1,0 +1,15 @@
+{
+  "DelayInputs": {
+    "ArtificialLatencyMs": 34.0,
+    "JitterMs": 5.0,
+    "OnlyInPracticeMode": true
+  },
+  "ModifySprintControl": {
+    "MinimumSpeedToSprint": 0.0,
+    "StopInputWhenPlayerMovingBackwardsAndMovingForward": false
+  },
+  "ForceStopWhenChangingDirection": {
+    "ForceStopWhenForwardsToBackwards": false,
+    "ForceStopWhenBackwardsToForwards": true
+  }
+}

@@ -13,6 +13,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DelayInputs", "DelayInputs\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FixScoreboard", "FixScoreboard\FixScoreboard.csproj", "{8B2A3CA3-FCC4-4B69-9FDA-A2F7C2B0BF70}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "demsInputControl", "demsInputControl\demsInputControl.csproj", "{160CC2D6-8E61-4EF0-A8C8-302D0F4D6D39}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PuckUtilities", "PuckUtilities\PuckUtilities.csproj", "{CA2FEF30-9BE1-47C0-892B-0E43B856C744}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +43,14 @@ Global
 		{8B2A3CA3-FCC4-4B69-9FDA-A2F7C2B0BF70}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8B2A3CA3-FCC4-4B69-9FDA-A2F7C2B0BF70}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8B2A3CA3-FCC4-4B69-9FDA-A2F7C2B0BF70}.Release|Any CPU.Build.0 = Release|Any CPU
+		{160CC2D6-8E61-4EF0-A8C8-302D0F4D6D39}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{160CC2D6-8E61-4EF0-A8C8-302D0F4D6D39}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{160CC2D6-8E61-4EF0-A8C8-302D0F4D6D39}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{160CC2D6-8E61-4EF0-A8C8-302D0F4D6D39}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CA2FEF30-9BE1-47C0-892B-0E43B856C744}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CA2FEF30-9BE1-47C0-892B-0E43B856C744}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CA2FEF30-9BE1-47C0-892B-0E43B856C744}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CA2FEF30-9BE1-47C0-892B-0E43B856C744}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
