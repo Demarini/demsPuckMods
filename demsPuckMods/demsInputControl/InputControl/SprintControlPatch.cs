@@ -1,10 +1,7 @@
 ﻿using demsInputControl.Singletons;
+using demsInputControl.Utils;
+using demsInputControl.Logging;
 using HarmonyLib;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace demsInputControl.InputControl
@@ -14,16 +11,27 @@ namespace demsInputControl.InputControl
     {
         public static void Postfix(PlayerInput __instance)
         {
-            var player = __instance.Player?.PlayerBody;
-
+            bool holdingBackward = __instance.MoveInput.ClientValue.y < -0.15f;
             var localVelocityZ = LocalVelocityTracker.LastLocalZVelocity;
 
             float minSpeed = ConfigData.Instance.ModifySprintControl.MinimumSpeedToSprint;
-            SprintControl.IsSprintingBlockedByVelocity = localVelocityZ < minSpeed;
+            bool allowMod = ConfigData.Instance.ModifySprintControl.AllowModifySprintControl;
+            bool allowSprintBackwards = ConfigData.Instance.ModifySprintControl.AllowSprintWhileMovingBackwards;
+            if (!ConfigData.Instance.ModifySprintControl.AllowModifySprintControl)
+            {
+                SprintControl.IsSprintingBlockedByVelocity = false;
+            }
+            else
+            {
+                bool holdingBackwards = __instance.MoveInput.ClientValue.y < -0.15f;
+                bool allowSprintWhileHoldingBack = ConfigData.Instance.ModifySprintControl.AllowSprintWhileMovingBackwards;
+                bool belowMinSpeed = localVelocityZ < ConfigData.Instance.ModifySprintControl.MinimumSpeedToSprint;
 
-            // Debug
-            //if (SprintControl.IsSprintingBlockedByVelocity)
-                //Debug.Log($"[SprintControl] Blocking sprint - LocalZ: {localVelocity.z:F2}");
+                SprintControl.IsSprintingBlockedByVelocity =
+                    allowSprintWhileHoldingBack
+                        ? !holdingBackwards && belowMinSpeed
+                        : belowMinSpeed;
+            }
         }
     }
     public static class SprintControl

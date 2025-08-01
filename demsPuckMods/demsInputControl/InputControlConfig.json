@@ -5,11 +5,19 @@
     "OnlyInPracticeMode": true
   },
   "ModifySprintControl": {
-    "MinimumSpeedToSprint": 0.0,
-    "StopInputWhenPlayerMovingBackwardsAndMovingForward": false
+    "AllowModifySprintControl": true,
+    "AllowSprintingWhileMovingBackwards": true,
+    "MinimumSpeedToSprint": 0.1
   },
   "ForceStopWhenChangingDirection": {
     "ForceStopWhenForwardsToBackwards": false,
-    "ForceStopWhenBackwardsToForwards": true
+    "ForceStopWhenBackwardsToForwards": false
+  },
+  "Logging": { //Useful for mod dev, don't enable unless you want your log file getting blown up.
+    "VelocityLogging": false,
+    "RPCLogging": false,
+    "SprintControlLogging": false,
+    "PracticeModeDetectionLogging": false,
+    "StopControlLogging": false
   }
 }

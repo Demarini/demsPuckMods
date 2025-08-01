@@ -51,6 +51,7 @@
     <Compile Include="Config\ModConfig.cs" />
     <Compile Include="InputControl\SprintControlPatch.cs" />
     <Compile Include="Models\ForceStopWhenChangingDirection.cs" />
+    <Compile Include="Models\LoggingSettingsModel.cs" />
     <Compile Include="UnityPlugins\PluginBehavior.cs" />
     <Compile Include="Utils\Coroutines.cs" />
     <Compile Include="Utils\DelayInvoke.cs" />
@@ -63,6 +64,7 @@
     <Compile Include="Models\ModifySprintControlModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Singletons\ConfigData.cs" />
+    <Compile Include="Utils\InputControlLogger.cs" />
     <Compile Include="Utils\PlayerVelocity.cs" />
   </ItemGroup>
   <ItemGroup>

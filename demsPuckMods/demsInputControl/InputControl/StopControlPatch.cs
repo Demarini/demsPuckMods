@@ -1,5 +1,6 @@
 ﻿using demsInputControl.Singletons;
 using demsInputControl.Utils;
+using demsInputControl.Logging;
 using HarmonyLib;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +23,7 @@ namespace demsInputControl.InputControl
                 if (pb?.Player != null && pb.Player.IsLocalPlayer)
                 {
                     Cached = pb;
-                    Debug.Log($"[InputControl] Found local player: {pb.name}");
+                    InputControlLogger.Log(LogCategory.StopControl, $"[InputControl] Found local player: {pb.name}");
                     return true;
                 }
             }
@@ -30,7 +31,7 @@ namespace demsInputControl.InputControl
         }
     }
     [HarmonyPatch]
-    public static class SprintAndStopOverridePatch
+    public static class StopOverridePatch
     {
         // Block sprint visuals when moving backwards
         //[HarmonyPatch(typeof(PlayerBodyV2), "OnIsSprintingChanged")]
@@ -43,7 +44,7 @@ namespace demsInputControl.InputControl
 
         //    if (localVelocity.z < ConfigData.Instance.ModifySprintControl.MinimumSpeedToSprint)
         //    {
-        //        //Debug.Log("[InputControl] Preventing sprint animation due to reverse speed");
+        //        //InputControlLogger.Log(LogCategory.StopControl, "[InputControl] Preventing sprint animation due to reverse speed");
         //        return false; // Skip OnIsSprintingChanged
         //    }
 
@@ -67,7 +68,7 @@ namespace demsInputControl.InputControl
         [HarmonyPatch(typeof(PlayerBodyV2), "FixedUpdate")]
         public static class PlayerBodyVelocityTrackerPatch
         {
-            static int UpdatePerFrame = 4;
+            static int UpdatePerFrame = 0;
             static int FixedUpdateCount = 0;
             static float TimePassed = 0;
             [HarmonyPostfix]
@@ -80,7 +81,7 @@ namespace demsInputControl.InputControl
                     FixedUpdateCount = 0;
                     if (__instance != null)
                     {
-                        Debug.Log("Instance isn't null");
+                        InputControlLogger.Log(LogCategory.StopControl, "Instance isn't null");
                         if (__instance.Player != null)
                         {
                             if (__instance.Player.IsLocalPlayer)
@@ -88,24 +89,24 @@ namespace demsInputControl.InputControl
                                 LocalPlayerLocator.TryFind();
                                 if (__instance.Rigidbody == null)
                                 {
-                                    Debug.Log("Rigid Body Null");
+                                    InputControlLogger.Log(LogCategory.StopControl, "Rigid Body Null");
                                 }
                                 else
                                 {
-                                    Debug.Log("Rigid Body Not Null");
-                                    Debug.Log($"Rigid Body Velo: {__instance.Rigidbody.velocity}");
+                                    InputControlLogger.Log(LogCategory.StopControl, "Rigid Body Not Null");
+                                    InputControlLogger.Log(LogCategory.StopControl, $"Rigid Body Velo: {__instance.Rigidbody.velocity}");
                                 }
                                 LocalVelocityTracker.Update(__instance);
                                 TimePassed = 0;
                             }
                             else
                             {
-                                Debug.Log("Not Local Player");
+                                InputControlLogger.Log(LogCategory.StopControl, "Not Local Player");
                             }
                         }
                         else
                         {
-                            Debug.Log("Player Is Null");
+                            InputControlLogger.Log(LogCategory.StopControl, "Player Is Null");
                         }
 
                     }
@@ -126,7 +127,7 @@ namespace demsInputControl.InputControl
             public static void Postfix(PlayerInput __instance)
             {
 
-                if (!SprintAndStopOverridePatch.IsAutoStopping)
+                if (!StopOverridePatch.IsAutoStopping)
                     return;
 
                 float localZVel = LocalVelocityTracker.LastLocalZVelocity;
@@ -155,7 +156,7 @@ namespace demsInputControl.InputControl
                 }
                 if (clearStop)
                 {
-                    //Debug.Log("[InputControl] Auto-stop cleared via Update movement check.");
+                    //InputControlLogger.Log(LogCategory.StopControl, "[InputControl] Auto-stop cleared via Update movement check.");
                     IsAutoStopping = false;
                     ShouldForceStopInput = false;
                     CurrentStopDirection = StopDirection.None;
@@ -167,12 +168,12 @@ namespace demsInputControl.InputControl
         [HarmonyPrefix]
         private static bool AutoStopWhenReversing(PlayerInput __instance, short x, short y)
         {
-            Debug.Log("[InputControl] MoveInputRPC");
+            InputControlLogger.Log(LogCategory.StopControl, "[InputControl] MoveInputRPC");
             var forceStopConfig = ConfigData.Instance.ForceStopWhenChangingDirection;
             if (forceStopConfig == null) return true;
             //var player = __instance.Player.PlayerBody;
             //if (player == null || player.Rigidbody == null) return true;
-            Debug.Log($"Player Local Velocity Z {LocalVelocityTracker.LastLocalZVelocity}");
+            InputControlLogger.Log(LogCategory.StopControl, $"Player Local Velocity Z {LocalVelocityTracker.LastLocalZVelocity}");
             Vector2 inputDir = new Vector2(x / 32767f, y / 32767f);
 
             float tickRate = __instance.TickRate > 0 ? __instance.TickRate : 200;
@@ -186,8 +187,8 @@ namespace demsInputControl.InputControl
             bool shouldStop =
     (ConfigData.Instance.ForceStopWhenChangingDirection.ForceStopWhenBackwardsToForwards && movingBackwards && pressingForward) ||
     (ConfigData.Instance.ForceStopWhenChangingDirection.ForceStopWhenForwardsToBackwards && movingForwards && pressingBackward);
-            Debug.Log($"Player Input Dir Y {inputDir.y}");
-            Debug.Log($"Should Stop {shouldStop}");
+            InputControlLogger.Log(LogCategory.StopControl, $"Player Input Dir Y {inputDir.y}");
+            InputControlLogger.Log(LogCategory.StopControl, $"Should Stop {shouldStop}");
             const float AutoStopTriggerMinSpeed = 1.0f;
             if (Mathf.Abs(localZVelocity) < AutoStopTriggerMinSpeed)
             {
@@ -197,9 +198,9 @@ namespace demsInputControl.InputControl
             {
                 if (now - lastStopTime >= tickInterval)
                 {
-                    //Debug.Log("[InputControl] Auto-stopping due to direction conflict.");
+                    //InputControlLogger.Log(LogCategory.StopControl, "[InputControl] Auto-stopping due to direction conflict.");
                     ShouldForceStopInput = true;
-                    Debug.Log("ShoudlForceStopInput True");
+                    InputControlLogger.Log(LogCategory.StopControl, "ShoudlForceStopInput True");
                     if (movingBackwards && pressingForward)
                         CurrentStopDirection = StopDirection.FromBackwardToForward;
                     else if (movingForwards && pressingBackward)
@@ -211,7 +212,7 @@ namespace demsInputControl.InputControl
                     __instance.StopInput.ClientValue = true;
                     //__instance.StopInput.ClientTick();
 
-                    //Debug.Log($"[InputControl] Set StopInput.ClientValue={__instance.StopInput.ClientValue}, LastSent={__instance.StopInput.LastSentValue}, HasChanged={__instance.StopInput.HasChanged}");
+                    //InputControlLogger.Log(LogCategory.StopControl, $"[InputControl] Set StopInput.ClientValue={__instance.StopInput.ClientValue}, LastSent={__instance.StopInput.LastSentValue}, HasChanged={__instance.StopInput.HasChanged}");
                     lastStopTime = now;
                     IsAutoStopping = true;
                 }
@@ -220,7 +221,7 @@ namespace demsInputControl.InputControl
             {
                 if (IsAutoStopping)
                 {
-                    //Debug.Log("[InputControl] Ending auto-stop override.");
+                    //InputControlLogger.Log(LogCategory.StopControl, "[InputControl] Ending auto-stop override.");
                     //ShouldForceStopInput = false;
                     IsAutoStopping = false;
                     ShouldForceStopInput = false;
@@ -236,7 +237,7 @@ namespace demsInputControl.InputControl
         [HarmonyPrefix]
         public static bool Prefix(PlayerInput __instance, bool value)
         {
-            //Debug.Log($"[Harmony][StopInputRpc] Intercepted RPC with value: {value}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"[Harmony][StopInputRpc] Intercepted RPC with value: {value}");
 
             var flags = BindingFlags.NonPublic | BindingFlags.Instance;
             var execStageField = typeof(NetworkBehaviour).GetField("__rpc_exec_stage", flags);
@@ -244,7 +245,7 @@ namespace demsInputControl.InputControl
             if (execStageField != null)
             {
                 object execStage = execStageField.GetValue(__instance);
-                //Debug.Log($"[Harmony][StopInputRpc] ExecStage via reflection: {execStage}");
+                //InputControlLogger.Log(LogCategory.StopControl, $"[Harmony][StopInputRpc] ExecStage via reflection: {execStage}");
             }
             else
             {
@@ -271,7 +272,7 @@ namespace demsInputControl.InputControl
 
         //        if (__instance.StopInput.ClientValue && holdingForward && movingForwardEnough)
         //        {
-        //            //Debug.Log("[Harmony][PlayerInput] Auto-clearing StopInput.Value due to resumed forward movement");
+        //            //InputControlLogger.Log(LogCategory.StopControl, "[Harmony][PlayerInput] Auto-clearing StopInput.Value due to resumed forward movement");
         //            __instance.StopInput.ClientValue = false;
         //            ShouldForceStopInput = false;
         //        }
@@ -296,15 +297,15 @@ namespace demsInputControl.InputControl
                 ? movement.MovementDirection.InverseTransformVector(velocity)
                 : velocity;
 
-            //Debug.Log($"[Harmony][HandleInputs] Called at Time.time={Time.time:F2}");
-            //Debug.Log($"  MoveForwards: {movement.MoveForwards}");
-            //Debug.Log($"  MoveBackwards: {movement.MoveBackwards}");
-            //Debug.Log($"  TurnLeft: {movement.TurnLeft}");
-            //Debug.Log($"  TurnRight: {movement.TurnRight}");
-            //Debug.Log($"  Velocity (world): {velocity}");
-            //Debug.Log($"  Velocity (local z): {localVelocity.z:F3}");
-            //Debug.Log($"  StopInput.ServerValue: {__instance.Player.PlayerInput.StopInput.ServerValue}");
-            //Debug.Log($"  SlideInput.ServerValue: {__instance.Player.PlayerInput.SlideInput.ServerValue}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"[Harmony][HandleInputs] Called at Time.time={Time.time:F2}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"  MoveForwards: {movement.MoveForwards}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"  MoveBackwards: {movement.MoveBackwards}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"  TurnLeft: {movement.TurnLeft}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"  TurnRight: {movement.TurnRight}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"  Velocity (world): {velocity}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"  Velocity (local z): {localVelocity.z:F3}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"  StopInput.ServerValue: {__instance.Player.PlayerInput.StopInput.ServerValue}");
+            //InputControlLogger.Log(LogCategory.StopControl, $"  SlideInput.ServerValue: {__instance.Player.PlayerInput.SlideInput.ServerValue}");
         }
     }
     public enum StopDirection

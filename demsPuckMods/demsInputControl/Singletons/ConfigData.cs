@@ -78,6 +78,7 @@ namespace demsInputControl.Singletons
                 Debug.LogError($"[InputControl] Failed to save config: {ex}");
             }
         }
+        public LoggingSettingsModel Logging { get; set; } = new LoggingSettingsModel();
         public DelayInputsModel DelayInputs { get; set; }
         public ModifySprintControlModel ModifySprintControl { get; set; }
         public ForceStopWhenChangingDirection ForceStopWhenChangingDirection { get; set; }
