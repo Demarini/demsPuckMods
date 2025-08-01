@@ -49,6 +49,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Config\ModConfig.cs" />
+    <Compile Include="InputControl\SprintControlPatch.cs" />
     <Compile Include="Models\ForceStopWhenChangingDirection.cs" />
     <Compile Include="UnityPlugins\PluginBehavior.cs" />
     <Compile Include="Utils\Coroutines.cs" />
@@ -56,12 +57,13 @@
     <Compile Include="Utils\HarmonyUtils.cs" />
     <Compile Include="InitializeInputControl.cs" />
     <Compile Include="InputControl\PracticeModeDetector.cs" />
-    <Compile Include="InputControl\SprintControlPatch.cs" />
+    <Compile Include="InputControl\StopControlPatch.cs" />
     <Compile Include="Models\DelayInputsModel.cs" />
-    <Compile Include="InputControl\DelayInputsPatch.cs" />
+    <Compile Include="InputControl\ManageInputs.cs" />
     <Compile Include="Models\ModifySprintControlModel.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Singletons\ConfigData.cs" />
+    <Compile Include="Utils\PlayerVelocity.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="InputControlConfig.json">

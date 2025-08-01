@@ -81,5 +81,29 @@ namespace demsInputControl.InputControl
                 Debug.Log("[InputControl] Left Practice Mode (Disconnect)");
             IsPracticeMode = false;
         }
+        [HarmonyPatch(typeof(ConnectionManager))]
+        public static class ConnectionManagerPracticePatches
+        {
+            [HarmonyPostfix]
+            [HarmonyPatch("Client_StartClient")]
+            private static void AfterStartClient(ConnectionManager __instance, string ipAddress, ushort port, string password)
+            {
+                // Extract the ConnectionData JSON from NetworkConfig (it holds PRACTICE flag in logs)
+                string json = null;
+                if (__instance != null && NetworkManager.Singleton != null)
+                {
+                    json = System.Text.Encoding.ASCII.GetString(NetworkManager.Singleton.NetworkConfig.ConnectionData);
+                }
+
+                PracticeModeDetector.OnClientStart(ipAddress, port, password, json);
+            }
+
+            [HarmonyPostfix]
+            [HarmonyPatch("Client_Disconnect")]
+            private static void AfterDisconnect()
+            {
+                PracticeModeDetector.OnClientDisconnect();
+            }
+        }
     }
 }

@@ -9,6 +9,5 @@ namespace demsInputControl.Models
     public class ModifySprintControlModel
     {
         public float MinimumSpeedToSprint { get; set; } = 0f;
-        public bool StopInputWhenPlayerMovingBackwardsAndMovingForward { get; set; }//talk about a verbose name
     }
 }

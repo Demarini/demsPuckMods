@@ -12,6 +12,38 @@ using UnityEngine.Windows;
 
 namespace demsInputControl
 {
+    [HarmonyPatch]
+    public static class NetworkedInputClientTickLogger
+    {
+        static MethodBase TargetMethod()
+        {
+            // Get NetworkedInput<bool>.ClientTick
+            var genericType = typeof(NetworkedInput<bool>);
+            return genericType.GetMethod("ClientTick", BindingFlags.Public | BindingFlags.Instance);
+        }
+
+        static void Postfix(object __instance)
+        {
+            // Extract fields via reflection
+            Type type = __instance.GetType();
+
+            var clientVal = (bool)type.GetField("ClientValue").GetValue(__instance);
+            var lastSentVal = (bool)type.GetField("LastSentValue").GetValue(__instance);
+            var time = (double)type.GetField("LastSentTime").GetValue(__instance);
+
+            //Debug.Log($"[Harmony][ClientTick] Called on NetworkedInput<bool>");
+            //Debug.Log($"  ClientValue: {clientVal}");
+            //Debug.Log($"  LastSentValue: {lastSentVal}");
+            //Debug.Log($"  LastSentTime: {time:F3}");
+
+            var hasChangedProp = type.GetProperty("HasChanged");
+            if (hasChangedProp != null)
+            {
+                bool hasChanged = (bool)hasChangedProp.GetValue(__instance);
+                //Debug.Log($"  HasChanged (after ClientTick): {hasChanged}");
+            }
+        }
+    }
     [HarmonyPatch(typeof(PlayerInput))]
     public static class PlayerInputLatencyPatch
     {
@@ -31,16 +63,11 @@ namespace demsInputControl
         private static bool Prefix(PlayerInput __instance)
         {
             // If latency is disabled, run original ClientTick
-            if (delay <= 0f ||
-            (ConfigData.Instance.DelayInputs.OnlyInPracticeMode && !PracticeModeDetector.IsPracticeMode))
-            {
-                return true; // run original ClientTick with no modification
-            }
             float now = Time.time;
             if (now - lastServerValueLogTime >= 0.5f)
             {
-                Debug.Log($"[InputControl] Server Value (StopInput): {__instance.StopInput.ServerValue}");
-                Debug.Log($"[InputControl] Client Value (StopInput): {__instance.StopInput.ClientValue}");
+                //Debug.Log($"[InputControl] Server Value (StopInput): {__instance.StopInput.ServerValue}");
+                //Debug.Log($"[InputControl] Client Value (StopInput): {__instance.StopInput.ClientValue}");
                 lastServerValueLogTime = now;
             }
 
@@ -53,18 +80,21 @@ namespace demsInputControl
     .GetMethod("HandleInputs", BindingFlags.NonPublic | BindingFlags.Instance);
         private static void QueueAllInputs(PlayerInput input)
         {
-            bool noLatency = delay <= 0f ||
-                (ConfigData.Instance.DelayInputs.OnlyInPracticeMode && !PracticeModeDetector.IsPracticeMode);
+            bool shouldSimulateLatency = delay > 0f &&
+    (!ConfigData.Instance.DelayInputs.OnlyInPracticeMode || PracticeModeDetector.IsPracticeMode);
 
             void EnqueueOrApply(Action rpc, Action tick)
             {
-                if (noLatency)
+                Debug.Log($"Is Practice Mode: {PracticeModeDetector.IsPracticeMode}");
+                if (!shouldSimulateLatency)
                 {
+                    Debug.Log("No Latency");
                     rpc();
                     tick();
                 }
                 else
                 {
+                    Debug.Log("Latency");
                     inputQueue.Enqueue(new BufferedInput
                     {
                         TimeToApply = Time.time + delay,
@@ -94,12 +124,12 @@ namespace demsInputControl
                         Vector3 localVel = movement.MovementDirection.InverseTransformVector(movement.Rigidbody.linearVelocity);
                         if (Mathf.Abs(localVel.z) < 0.05f) // Only invoke when movement has stopped
                         {
-                            Debug.Log("[InputControl] Velocity near zero, calling HandleInputs()");
+                            //Debug.Log("[InputControl] Velocity near zero, calling HandleInputs()");
                             handleInputsMethod.Invoke(body, null);
                         }
                         else
                         {
-                            Debug.Log("[InputControl] Skipping HandleInputs() due to velocity: " + localVel.z.ToString("F3"));
+                            //Debug.Log("[InputControl] Skipping HandleInputs() due to velocity: " + localVel.z.ToString("F3"));
                         }
                     }
                 },
@@ -132,7 +162,7 @@ namespace demsInputControl
                 EnqueueOrApply(() => input.Client_SlideInputRpc(val), () => input.SlideInput.ClientTick());
             }
 
-            if (input.SprintInput.HasChanged)
+            if (input.SprintInput.HasChanged && !SprintControl.IsSprintingBlockedByVelocity)
             {
                 var val = input.SprintInput.ClientValue;
                 EnqueueOrApply(() => input.Client_SprintInputRpc(val), () => input.SprintInput.ClientTick());
@@ -154,25 +184,21 @@ namespace demsInputControl
             {
                 EnqueueOrApply(() => input.Client_JumpInputRpc(), () => input.JumpInput.ClientTick());
             }
-            if (!SprintAndStopOverridePatch.IsAutoStopping && input.StopInput.HasChanged)
+            //Debug.Log($"Stop Has Changed {input.StopInput.HasChanged}");
+            //Debug.Log($"Client Value {input.StopInput.ClientValue}");
+            //Debug.Log($"Last Value {input.StopInput.LastSentValue}");
+            if (input.StopInput.HasChanged && !SprintAndStopOverridePatch.ShouldForceStopInputChanged)
             {
                 Debug.Log("[InputControl] Queuing manual StopInput change");
                 EnqueueOrApply(() => input.Client_StopInputRpc(input.StopInput.ClientValue), () => input.StopInput.ClientTick());
             }
-            try
+            if (SprintAndStopOverridePatch.ShouldForceStopInputChanged)
             {
-                if (SprintAndStopOverridePatch.ShouldForceStopInputChanged)
-                {
-                    Debug.Log("Stop Input Has Changed");
-                    SprintAndStopOverridePatch.LastForceStopInput = SprintAndStopOverridePatch.ShouldForceStopInput;
-                    EnqueueOrApply(() => input.Client_StopInputRpc(SprintAndStopOverridePatch.ShouldForceStopInput), () => { });
-                    Debug.Log($"Sending Stop Input {SprintAndStopOverridePatch.ShouldForceStopInput}");
-                    Debug.Log($"Server Value {input.StopInput.ServerValue}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError("[InputControl] Error while checking ShouldForceStopInputChanged: " + ex);
+                Debug.Log("Stop Input Has Changed");
+                SprintAndStopOverridePatch.LastForceStopInput = SprintAndStopOverridePatch.ShouldForceStopInput;
+                EnqueueOrApply(() => input.Client_StopInputRpc(SprintAndStopOverridePatch.ShouldForceStopInput), () => { });
+                //Debug.Log($"Sending Stop Input {SprintAndStopOverridePatch.ShouldForceStopInput}");
+                //Debug.Log($"Server Value {input.StopInput.ServerValue}");
             }
             if (input.JumpInput.HasChanged)
             {
@@ -280,16 +306,16 @@ namespace demsInputControl
             // Log raw velocity in local and world space
             Vector3 worldVel = movement.Rigidbody.linearVelocity;
             Vector3 localVel = movement.MovementDirection.InverseTransformVector(worldVel);
-            Debug.Log($"[Harmony][Velocity] LocalVelocity.z: {localVel.z:F3}, WorldVelocity: {worldVel}");
+            //Debug.Log($"[Harmony][Velocity] LocalVelocity.z: {localVel.z:F3}, WorldVelocity: {worldVel}");
 
             // Input flags
-            Debug.Log($"[Harmony][InputFlags] MoveForwards: {movement.MoveForwards}, MoveBackwards: {movement.MoveBackwards}");
+            //Debug.Log($"[Harmony][InputFlags] MoveForwards: {movement.MoveForwards}, MoveBackwards: {movement.MoveBackwards}");
 
             // Grab private fields
             var flags = BindingFlags.NonPublic | BindingFlags.Instance;
             float currentMaxSpeed = movement.GetType().GetField("currentMaxSpeed", flags)?.GetValue(movement) as float? ?? -1f;
             float currentAcceleration = movement.GetType().GetField("currentAcceleration", flags)?.GetValue(movement) as float? ?? -1f;
-            Debug.Log($"[Harmony][Speed] Speed: {movement.Speed:F3}, currentMaxSpeed: {currentMaxSpeed:F3}, currentAcceleration: {currentAcceleration:F3}");
+            //Debug.Log($"[Harmony][Speed] Speed: {movement.Speed:F3}, currentMaxSpeed: {currentMaxSpeed:F3}, currentAcceleration: {currentAcceleration:F3}");
 
             // Direction vectors and diagnostics
             Vector3 forward = movement.MovementDirection.forward;
@@ -298,11 +324,11 @@ namespace demsInputControl
 
             Debug.DrawRay(movement.transform.position, forward * 3f, Color.green); // Forward direction
             Debug.DrawRay(movement.transform.position, velocityDir * 3f, Color.red); // Velocity direction
-            Debug.Log($"[Harmony][Move] forward: {forward}");
-            Debug.Log($"[Harmony][Move] Dot(forward, velocity): {dot:F3}");
+            //Debug.Log($"[Harmony][Move] forward: {forward}");
+            //Debug.Log($"[Harmony][Move] Dot(forward, velocity): {dot:F3}");
             if (dot < 0f)
             {
-                Debug.LogWarning("[Harmony][Move] 🚨 Velocity is opposite of forward direction — may be canceling out!");
+                //Debug.LogWarning("[Harmony][Move] 🚨 Velocity is opposite of forward direction — may be canceling out!");
             }
 
             // Detect IsMoving* changes
@@ -311,13 +337,13 @@ namespace demsInputControl
 
             if (currentForward != cache.LastForward)
             {
-                Debug.Log($"[Harmony][Movement] IsMovingForwards changed to {currentForward}");
+                //Debug.Log($"[Harmony][Movement] IsMovingForwards changed to {currentForward}");
                 cache.LastForward = currentForward;
             }
 
             if (currentBackward != cache.LastBackward)
             {
-                Debug.Log($"[Harmony][Movement] IsMovingBackwards changed to {currentBackward}");
+                //Debug.Log($"[Harmony][Movement] IsMovingBackwards changed to {currentBackward}");
                 cache.LastBackward = currentBackward;
             }
         }
