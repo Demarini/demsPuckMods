@@ -46,8 +46,26 @@ namespace demsInputControl
     [HarmonyPatch(typeof(PlayerInput))]
     public static class PlayerInputLatencyPatch
     {
+        private static readonly Queue<float> recentDelays = new Queue<float>();
+        private const int delaySampleWindow = 10;
+
+        private static float lastDelay = 0f;
+        private static bool smoothingArmed = false;
+        private static float smoothingTriggerTime = 0f;
+        private static float _pingSpikeEndTime = -1f;
+        private static float _pingSpikeExtraLatency = 0f;
+
+        private static float CurrentDelay
+        {
+            get
+            {
+                float baseDelay = ConfigData.Instance.DelayInputs.ArtificialLatencyMs / 1000f;
+                float jitter = UnityEngine.Random.Range(-ConfigData.Instance.DelayInputs.JitterMs, ConfigData.Instance.DelayInputs.JitterMs) / 1000f;
+                float extra = (Time.time <= _pingSpikeEndTime) ? _pingSpikeExtraLatency : 0f;
+                return baseDelay + jitter + extra;
+            }
+        }
         static float jitter = UnityEngine.Random.Range(-ConfigData.Instance.DelayInputs.JitterMs, ConfigData.Instance.DelayInputs.JitterMs);
-        static float delay = (ConfigData.Instance.DelayInputs.ArtificialLatencyMs + jitter) / 1000f;
         private static readonly Queue<BufferedInput> inputQueue = new Queue<BufferedInput>();
 
         private class BufferedInput
@@ -57,12 +75,17 @@ namespace demsInputControl
         }
 
         private static float lastServerValueLogTime = 0f;
-
+        private static float nextSpikeTime = 10f;
         [HarmonyPatch(typeof(PlayerInput), "ClientTick")]
         [HarmonyPrefix]
         private static bool Prefix(PlayerInput __instance)
         {
             float now = Time.time;
+            if (now >= nextSpikeTime)
+            {
+                SimulatePingSpike(100f, 0.1f); // 100ms spike for 0.05s
+                nextSpikeTime = now + 10f;
+            }
             if (now - lastServerValueLogTime >= 0.5f)
             {
                 InputControlLogger.Log(LogCategory.StopControl, $"Server Value (StopInput): {__instance.StopInput.ServerValue}");
@@ -71,19 +94,23 @@ namespace demsInputControl
                 InputControlLogger.Log(LogCategory.SprintControl, $"Client Value (SprintInput): {__instance.SprintInput.ClientValue}");
                 lastServerValueLogTime = now;
             }
-
             QueueAllInputs(__instance);
             ProcessQueue();
 
             return false;
         }
-
+        public static void SimulatePingSpike(float extraLatencyMs = 100f, float durationSeconds = 0.05f)
+        {
+            _pingSpikeExtraLatency = extraLatencyMs / 1000f;
+            _pingSpikeEndTime = Time.time + durationSeconds;
+            InputControlLogger.Log(LogCategory.PracticeModeDetection, $"[PingSpike] Simulating spike of +{extraLatencyMs}ms for {durationSeconds}s");
+        }
         private static readonly MethodInfo handleInputsMethod = typeof(PlayerBodyV2)
             .GetMethod("HandleInputs", BindingFlags.NonPublic | BindingFlags.Instance);
 
         private static void QueueAllInputs(PlayerInput input)
         {
-            bool shouldSimulateLatency = delay > 0f && (!ConfigData.Instance.DelayInputs.OnlyInPracticeMode || PracticeModeDetector.IsPracticeMode);
+            bool shouldSimulateLatency = CurrentDelay > 0f && (!ConfigData.Instance.DelayInputs.OnlyInPracticeMode || PracticeModeDetector.IsPracticeMode);
 
             void EnqueueOrApply(Action rpc, Action tick)
             {
@@ -100,7 +127,7 @@ namespace demsInputControl
                     InputControlLogger.Log(LogCategory.PracticeModeDetection, "Latency");
                     inputQueue.Enqueue(new BufferedInput
                     {
-                        TimeToApply = Time.time + delay,
+                        TimeToApply = Time.time + CurrentDelay,
                         Apply = () => { rpc(); tick(); }
                     });
                 }
