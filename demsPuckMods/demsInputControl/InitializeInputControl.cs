@@ -28,42 +28,17 @@ namespace demsInputControl
             {
                 //foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
                 //{
-                //    foreach (var type in asm.GetTypes())
+                //    foreach (var type in asm.GetTypes().Where(t => t.Name.StartsWith("NetworkedInput")))
                 //    {
-                //        foreach (var method in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                //        Debug.Log($"[InputControl] Found input type: {type.FullName}");
+                //        foreach (var f in type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public))
                 //        {
-                //            if (method.Name.Contains("Sprint") || method.ToString().Contains("SprintInput"))
-                //            {
-                //                Debug.Log($"[InputControl] Found method: {type.FullName}.{method.Name}");
-                //            }
+                //            Debug.Log($"[InputControl]   Field: {f.Name} ({f.FieldType})");
                 //        }
                 //    }
                 //}
-                // Before patching, enumerate all NetworkedInput<> variants for visibility
-                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    foreach (var type in asm.GetTypes().Where(t => t.Name.StartsWith("NetworkedInput")))
-                    {
-                        Debug.Log($"[InputControl] Found input type: {type.FullName}");
-                        foreach (var f in type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public))
-                        {
-                            Debug.Log($"[InputControl]   Field: {f.Name} ({f.FieldType})");
-                        }
-                    }
-                }
 
                 harmony.PatchAll();
-                //foreach (var patch in Harmony.GetAllPatchedMethods())
-                //{
-                //    Debug.Log("[Harmony] Patched method: " + patch.DeclaringType + "." + patch.Name);
-                //}
-                //foreach (var method in typeof(PlayerInput).GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
-                //{
-                //    if (method.Name.Contains("MoveInput"))
-                //    {
-                //        Debug.Log("[DEBUG] Found method: " + method.Name);
-                //    }
-                //}
                 Debug.Log("[InputControl] Harmony patches applied");
             }
             catch (System.Exception e)

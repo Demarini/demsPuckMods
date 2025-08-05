@@ -16,32 +16,32 @@ namespace demsInputControl
     [HarmonyPatch]
     public static class NetworkedInputClientTickLogger
     {
-        static MethodBase TargetMethod()
-        {
-            var genericType = typeof(NetworkedInput<bool>);
-            return genericType.GetMethod("ClientTick", BindingFlags.Public | BindingFlags.Instance);
-        }
+        //static MethodBase TargetMethod()
+        //{
+        //    var genericType = typeof(NetworkedInput<bool>);
+        //    return genericType.GetMethod("ClientTick", BindingFlags.Public | BindingFlags.Instance);
+        //}
 
-        static void Postfix(object __instance)
-        {
-            Type type = __instance.GetType();
+        //static void Postfix(object __instance)
+        //{
+        //    Type type = __instance.GetType();
 
-            var clientVal = (bool)type.GetField("ClientValue").GetValue(__instance);
-            var lastSentVal = (bool)type.GetField("LastSentValue").GetValue(__instance);
-            var time = (double)type.GetField("LastSentTime").GetValue(__instance);
+        //    var clientVal = (bool)type.GetField("ClientValue").GetValue(__instance);
+        //    var lastSentVal = (bool)type.GetField("LastSentValue").GetValue(__instance);
+        //    var time = (double)type.GetField("LastSentTime").GetValue(__instance);
 
-            InputControlLogger.Log(LogCategory.RPC, "[Harmony][ClientTick] Called on NetworkedInput<bool>");
-            InputControlLogger.Log(LogCategory.RPC, $"  ClientValue: {clientVal}");
-            InputControlLogger.Log(LogCategory.RPC, $"  LastSentValue: {lastSentVal}");
-            InputControlLogger.Log(LogCategory.RPC, $"  LastSentTime: {time:F3}");
+        //    InputControlLogger.Log(LogCategory.RPC, "[Harmony][ClientTick] Called on NetworkedInput<bool>");
+        //    InputControlLogger.Log(LogCategory.RPC, $"  ClientValue: {clientVal}");
+        //    InputControlLogger.Log(LogCategory.RPC, $"  LastSentValue: {lastSentVal}");
+        //    InputControlLogger.Log(LogCategory.RPC, $"  LastSentTime: {time:F3}");
 
-            var hasChangedProp = type.GetProperty("HasChanged");
-            if (hasChangedProp != null)
-            {
-                bool hasChanged = (bool)hasChangedProp.GetValue(__instance);
-                InputControlLogger.Log(LogCategory.RPC, $"  HasChanged (after ClientTick): {hasChanged}");
-            }
-        }
+        //    var hasChangedProp = type.GetProperty("HasChanged");
+        //    if (hasChangedProp != null)
+        //    {
+        //        bool hasChanged = (bool)hasChangedProp.GetValue(__instance);
+        //        InputControlLogger.Log(LogCategory.RPC, $"  HasChanged (after ClientTick): {hasChanged}");
+        //    }
+        //}
     }
     [HarmonyPatch(typeof(PlayerInput))]
     public static class PlayerInputLatencyPatch
@@ -83,7 +83,7 @@ namespace demsInputControl
             float now = Time.time;
             if (now >= nextSpikeTime)
             {
-                SimulatePingSpike(100f, 0.1f); // 100ms spike for 0.05s
+                //SimulatePingSpike(100f, 0.1f); // 100ms spike for 0.05s
                 nextSpikeTime = now + 10f;
             }
             if (now - lastServerValueLogTime >= 0.5f)
