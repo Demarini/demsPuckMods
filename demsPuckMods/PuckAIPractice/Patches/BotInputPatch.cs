@@ -1,5 +1,7 @@
 ﻿using DG.Tweening;
 using HarmonyLib;
+using PuckAIPractice.AI;
+using PuckAIPractice.GameModes;
 using PuckAIPractice.Utilities;
 using System;
 using System.Collections;
@@ -90,8 +92,13 @@ namespace PuckAIPractice.Patches
         static Vector3 redNetCenter = new Vector3(0.0f, 0.8f, -40.23f);
         static Vector3 blueNetCenter = new Vector3(0.0f, 0.8f, 40.23f);
         static float overshootDistanceThreshold = 2f;
+        public static bool IsBehindNetRed;
+        public static float SignedLateralOffsetRed;
+        public static bool IsBehindNetBlue;
+        public static float SignedLateralOffsetBlue;
         private static IEnumerator MoveFakePlayer(PlayerBodyV2 body, Vector3 target, float duration)
         {
+            Debug.Log("Starting Move Faker Player");
             const float slideTurnMultiplier = 2f;
             const float jumpTurnMultiplier = 5f;
             const float fallenDrag = 0.2f;
@@ -101,7 +108,7 @@ namespace PuckAIPractice.Patches
             const float slideHoverDistance = 0.8f;
             float elapsed = 0f;
             Vector3 start = body.transform.position;
-            Vector3 dashDir = Vector3.right * Mathf.Sign((target - start).x);
+
             var state = body.GetComponent<SimulateDashState>() ??
                         body.gameObject.AddComponent<SimulateDashState>();
             state.IsDashing = true;
@@ -135,9 +142,8 @@ namespace PuckAIPractice.Patches
             body.VelocityLean.UseWorldLinearVelocity = body.IsJumping || body.IsSliding.Value;
             // 🔊 Start audio
             updateAudioMethod?.Invoke(body, null);
-
+            GoalieAI goalieAI = body.GetComponent<GoalieAI>();
             Vector3 lastPosition = start;
-
             while (elapsed < duration && state.IsDashing)
             {
                 Vector3 netPos = body.Player.Team.Value == PlayerTeam.Red ? redNetCenter : blueNetCenter;
@@ -150,8 +156,28 @@ namespace PuckAIPractice.Patches
 
                 Vector3 moveDir = (pos - lastPosition).normalized;
                 Vector3 toTarget = (target - pos).normalized;
-                float alignment = Vector3.Dot(dashDir, toTarget);
-                if (t > 0.05f && alignment < -0.001f)
+                float alignment = Vector3.Dot(moveDir, toTarget);
+                Debug.Log($"[MoveFakePlayer] isBehindNet = {(body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed: IsBehindNetBlue)}, signedOffset = {(body.Player.Team.Value == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue)}, moveDir = {moveDir}");
+                if ((body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed : IsBehindNetBlue))
+                {
+                    Vector3 goalRight = body.Player.Team.Value == PlayerTeam.Red ? Vector3.left : Vector3.right;
+                    float signedOffset = body.Player.Team.Value == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue;
+
+                    // Only run if we're actually moving
+                    if (moveDir.sqrMagnitude > 0.001f)
+                    {
+                        float directionalAlignment = Vector3.Dot(moveDir, goalRight * Mathf.Sign(signedOffset));
+                        Debug.Log($"[MoveFakePlayer] Directional alignment behind net = {directionalAlignment:F3}");
+
+                        // Now break ONLY if they’re moving the wrong way
+                        if (directionalAlignment < -0.5f)
+                        {
+                            Debug.Log("[MoveFakePlayer] Behind net — moving wrong direction!");
+                            break;
+                        }
+                    }
+                }
+                if (t > 0.05f && alignment < 0.5f && !(body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed : IsBehindNetBlue))
                 {
                     Debug.Log($"[MoveFakePlayer] 🚨 Moving away from target!");
                     Debug.Log($"Target Position: {target}");
@@ -164,7 +190,7 @@ namespace PuckAIPractice.Patches
                 }
 
                 lastPosition = pos;
-
+                
                 body.transform.position = Vector3.Lerp(start, target, EaseOutQuad(t));
                 updateAudioMethod?.Invoke(body, null);
 
@@ -174,7 +200,7 @@ namespace PuckAIPractice.Patches
             // Snap to target if dash finished normally
             //if (state.IsDashing)
             //body.transform.position = target;
-
+            Debug.Log("Ending Dash!");
             // 🛑 Clear dash state
             state.IsDashing = false;
             body.IsSliding.Value = false;
@@ -330,11 +356,11 @@ namespace PuckAIPractice.Patches
             
             if (donorList.Contains(player.SteamId.Value.ToString()))
             {
-                return $"<b><color=#00AAFF>DONOR</color></b>";
+                return $"<b><color=#00AAFF>DA_ROBO_MAN</color></b>";
             }
             else
             {
-                return $"<b><color=#00AAFF>BOT ROLE</color></b>";
+                return $"<b><color=#00AAFF>SAVE_BOT_3000</color></b>";
             }
         }
     }

@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using PuckAIPractice.Patches;
+using System.Collections;
 using Unity.Mathematics.Geometry;
 using UnityEngine;
 
@@ -20,7 +21,6 @@ namespace PuckAIPractice.AI
         private PlayerBodyV2 body;
         private Vector3? targetCancelPosition = null;
         private float cancelInterpSpeed = 20f; // tweak this value to control smoothness
-
         void Start()
         {
             Debug.Log("Goalie AI Started");
@@ -96,36 +96,47 @@ namespace PuckAIPractice.AI
             Vector3 goalCenter = (controlledPlayer.Team.Value == PlayerTeam.Red) ? redGoal : blueGoal;
             Vector3 goalieToPuck = puckPos - goaliePos;
             Vector3 goalieForward = neutralForward;
-            float forwardDot = Vector3.Dot(goalieForward, goalieToPuck.normalized);
+            Vector3 netToPuck = puckPos - goalCenter;
+            Vector3 netForward = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.back : Vector3.forward;
+            float forwardDot = Vector3.Dot(neutralForward, netToPuck.normalized);
+            if(forwardDot < .5f)
+            {
+                if(controlledPlayer.Team.Value == PlayerTeam.Red)
+                {
+                    SimulateDashHelper.IsBehindNetRed = true;
+                }
+                else
+                {
+                    SimulateDashHelper.IsBehindNetBlue = true;
+                }
+            }
+            else
+            {
+                if (controlledPlayer.Team.Value == PlayerTeam.Red)
+                {
+                    SimulateDashHelper.IsBehindNetRed = true;
+                }
+                else
+                {
+                    SimulateDashHelper.IsBehindNetBlue = true;
+                }
+            }
+            CreateArrow(ref netForwardArrow, Color.green);
+            //CreateArrow(ref netToPuckArrow, Color.blue);
+            Color dotColor = (forwardDot >= 0.5f) ? Color.green : Color.red;
+            UpdateArrow(netForwardArrow, goalCenter, goalCenter + neutralForward * 4f, dotColor); // Green = Goalie forward
+            //UpdateArrow(netToPuckArrow, goaliePos, puckPos, dotColor);                        // Blue = To puck
             Vector3 projectedPoint = GetProjectedInterceptClamped(goaliePos, puckPos, goalCenter, forwardDot, out float signedLateralOffset, out float lateralDistance, out Vector3 puckToGoalDir);
+            if (controlledPlayer.Team.Value == PlayerTeam.Red)
+            {
+                SimulateDashHelper.SignedLateralOffsetRed = signedLateralOffset;
+            }
+            else
+            {
+                SimulateDashHelper.SignedLateralOffsetBlue = signedLateralOffset;
+            }
             lastComputedIntercept = projectedPoint;
             
-
-           
-            //if (forwardDot < .5f)
-            //{
-            //    projectedPoint = controlledPlayer.Team.Value == PlayerTeam.Blue ? blueGoal : redGoal;
-            //    if(signedLateralOffset < 0)
-            //    {
-            //        //right
-            //        //projectedPoint.x -= 2;
-            //        //projectedPoint.z -= GoalieSettings.Instance.DistanceFromNet;
-            //        //HandleDashLogic(toPuck, neutralRotation, lateralDistance, -signedLateralOffset, projectedPoint);
-            //    }
-            //    else
-            //    {
-            //        //projectedPoint.x += 2;
-            //        //projectedPoint.z -= GoalieSettings.Instance.DistanceFromNet;
-            //        //HandleDashLogic(toPuck, neutralRotation, lateralDistance, -signedLateralOffset, projectedPoint);
-            //    }
-            //    UpdateInterceptVisual(projectedPoint);
-            //    //Debug.Log("Behind Net");
-            //    return;
-            //}
-            //else
-            //{
-            //    //Debug.Log("Good Position");
-            //}
             HandleDashLogic(toPuck, neutralRotation, lateralDistance, signedLateralOffset, projectedPoint);
             UpdateInterceptVisual(projectedPoint);
             UpdatePuckLine(goalCenter, puckPos);
@@ -135,7 +146,6 @@ namespace PuckAIPractice.AI
             var puck = NetworkBehaviourSingleton<PuckManager>.Instance.GetPlayerPuck(NetworkBehaviourSingleton<PuckManager>.Instance.OwnerClientId);
             if (puck != null) puckTransform = puck.transform;
         }
-
         private void InitializeBody()
         {
             if (body != null) return;
@@ -182,6 +192,34 @@ namespace PuckAIPractice.AI
                 targetRotation,
                 Time.deltaTime * GoalieSettings.Instance.RotationSpeed
             );
+        }
+        private void UpdateArrow(GameObject obj, Vector3 start, Vector3 end, Color dotColor)
+        {
+            Vector3 direction = end - start;
+            Vector3 midPoint = start + direction / 2f;
+            obj.transform.position = midPoint;
+
+            obj.transform.rotation = Quaternion.FromToRotation(Vector3.up, direction);
+            obj.transform.localScale = new Vector3(0.1f, direction.magnitude / 2f, 0.1f);
+            var renderer = obj.GetComponent<Renderer>();
+            if (renderer != null)
+                renderer.material.color = dotColor;
+        }
+        private GameObject netForwardArrow;
+        private GameObject netToPuckArrow;
+        private GameObject leftBoundArrow;
+        private GameObject rightBoundArrow;
+
+        private void CreateArrow(ref GameObject obj, Color color)
+        {
+            if (obj == null)
+            {
+                var mat = new Material(Shader.Find("Sprites/Default"));
+                obj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                obj.transform.localScale = new Vector3(0.1f, 2f, 0.1f); // thin and long
+                obj.GetComponent<Renderer>().material = mat;
+                obj.GetComponent<Renderer>().material.color = color;
+            }
         }
         private Vector3 GetProjectedInterceptClampedPost(
     Vector3 goaliePos,
@@ -352,97 +390,6 @@ namespace PuckAIPractice.AI
 
             return intercept;
         }
-        //private Vector3 GetProjectedInterceptOnGoalLine(Vector3 goaliePos, Vector3 puckPos, Vector3 goalCenter, out float signedLateralOffset, out float lateralDistance, out Vector3 puckToGoalDir)
-        //{
-        //    // Fixed forward direction based on team
-        //    puckToGoalDir = (goalCenter - puckPos).normalized;
-
-        //    Vector3 rinkRight = (goalCenter.z > 0) ? Vector3.right : Vector3.left; // Red net is at +Z
-        //    Vector3 goalLineOrigin = goalCenter - puckToGoalDir * GoalieSettings.Instance.DistanceFromNet;
-
-        //    Vector3 puckOffset = puckPos - goalLineOrigin;
-        //    float lateralOffset = Vector3.Dot(puckOffset, rinkRight);
-
-        //    float maxLateral = 3.5f;
-        //    float clampedOffset = Mathf.Clamp(lateralOffset, -maxLateral, maxLateral);
-
-        //    signedLateralOffset = clampedOffset;
-        //    Vector3 interceptPoint = goalLineOrigin + rinkRight * clampedOffset;
-        //    lateralDistance = (interceptPoint - goaliePos).magnitude;
-
-        //    if (interceptTargetSphere != null)
-        //        interceptTargetSphere.transform.position = interceptPoint;
-
-        //    // Optional: still log with the simplified direction
-        //    Debug.Log($"[InterceptCalc] puckOffset: {puckOffset}, raw: {lateralOffset}, clamped: {clampedOffset}, Intercept: {interceptPoint}");
-
-        //    return interceptPoint;
-        //}
-        //private Vector3 GetProjectedInterceptOnGoalLine(Vector3 goaliePos, Vector3 puckPos, Vector3 goalCenter, out float signedLateralOffset, out float lateralDistance, out Vector3 puckToGoalDir)
-        //{
-        //    puckToGoalDir = (goalCenter - puckPos).normalized;
-        //    Vector3 puckToGoalRight = Vector3.Cross(Vector3.up, puckToGoalDir); // Right along goal line
-
-        //    // Where the goalie wants to project along the goal line, at a fixed depth
-        //    Vector3 goalLineOrigin = goalCenter - puckToGoalDir * GoalieSettings.Instance.DistanceFromNet;
-        //    Vector3 goaliePlanePos = goalLineOrigin;
-
-        //    // Offset from puck to the goal projection plane
-        //    Vector3 puckOffset = puckPos - goaliePlanePos;
-        //    float lateralOffset = Vector3.Dot(puckOffset, puckToGoalRight);
-
-        //    // Clamp lateral movement
-        //    float maxLateral = 3.5f;
-        //    float clampedOffset = Mathf.Clamp(lateralOffset, -maxLateral, maxLateral);
-
-        //    signedLateralOffset = clampedOffset;
-        //    Vector3 interceptPoint = goaliePlanePos + puckToGoalRight * clampedOffset;
-        //    lateralDistance = (interceptPoint - goaliePos).magnitude;
-
-        //    if (interceptTargetSphere != null)
-        //        interceptTargetSphere.transform.position = interceptPoint;
-
-        //    // 🔍 Logging
-        //    Debug.Log($"[InterceptCalc] -------------------------");
-        //    Debug.Log($"Goalie Pos        : {goaliePos}");
-        //    Debug.Log($"Puck Pos          : {puckPos}");
-        //    Debug.Log($"Goal Center       : {goalCenter}");
-        //    Debug.Log($"puckToGoalDir     : {puckToGoalDir}");
-        //    Debug.Log($"puckToGoalRight   : {puckToGoalRight}");
-        //    Debug.Log($"goalLineOrigin    : {goalLineOrigin}");
-        //    Debug.Log($"puckOffset        : {puckOffset}");
-        //    Debug.Log($"Raw Offset        : {lateralOffset}");
-        //    Debug.Log($"Clamped Offset    : {clampedOffset}");
-        //    Debug.Log($"Intercept Point   : {interceptPoint}");
-        //    Debug.Log($"Lateral Distance  : {lateralDistance}");
-
-        //    return interceptPoint;
-        //}
-        //private Vector3 GetProjectedInterceptOnGoalLine(Vector3 goaliePos, Vector3 puckPos, Vector3 goalCenter, out float signedLateralOffset, out float lateralDistance, out Vector3 puckToGoalDir)
-        //{
-        //    puckToGoalDir = (goalCenter - puckPos).normalized;
-        //    Vector3 puckToGoalRight = Vector3.Cross(Vector3.up, puckToGoalDir); // Right along goal line
-
-        //    // Use lateral projection only — how far left/right the puck is from the center line
-        //    Vector3 goalLineOrigin = goalCenter - puckToGoalDir * GoalieSettings.Instance.DistanceFromNet; // Fixed depth out from goal
-        //    Vector3 goaliePlanePos = goalLineOrigin;
-
-        //    Vector3 puckOffset = puckPos - goaliePlanePos;
-        //    float lateralOffset = Vector3.Dot(puckOffset, puckToGoalRight);
-
-        //    // Clamp so they don’t slide too far outside net width
-        //    float maxLateral = 3.5f;
-        //    lateralOffset = Mathf.Clamp(lateralOffset, -maxLateral, maxLateral);
-
-        //    signedLateralOffset = lateralOffset;
-        //    Vector3 interceptPoint = goaliePlanePos + puckToGoalRight * lateralOffset;
-        //    lateralDistance = (interceptPoint - goaliePos).magnitude;
-
-        //    if (interceptTargetSphere != null)
-        //        interceptTargetSphere.transform.position = interceptPoint;
-
-        //    return interceptPoint;
-        //}
         private Vector3 GetProjectedInterceptClamped(
     Vector3 goaliePos,
     Vector3 puckPos,
@@ -454,14 +401,15 @@ namespace PuckAIPractice.AI
         {
             const float maxLateral = 3.5f;
 
+            // Use same frame as puckToGoalRight from front-of-net mode
             Vector3 puckToGoal = goalCenter - puckPos;
             puckToGoalDir = puckToGoal.normalized;
             Vector3 puckToGoalRight = Vector3.Cross(Vector3.up, puckToGoalDir);
-
+            Vector3 goalRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right; // now used consistently in both modes
             // If puck is behind the goalie or in a steep angle, lock to post
             if (forwardDot < 0.5f)
             {
-                Vector3 goalRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right;
+                //Vector3 goalRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right;
                 Vector3 sideVec = puckPos - goalCenter;
                 float side = Vector3.Dot(sideVec, goalRight); // Which side of the net
 
@@ -508,7 +456,9 @@ namespace PuckAIPractice.AI
 
             if (interceptTargetSphere != null)
                 interceptTargetSphere.transform.position = finalPoint;
-
+            float maxDashRange = 2f;
+            //if (lateralDistance > maxDashRange)
+            //    finalPoint = goaliePos + puckToGoalRight * Mathf.Sign(signedLateralOffset) * 10f;
             return finalPoint;
         }
         private Vector3 GetProjectedInterceptClamped(Vector3 goaliePos, Vector3 puckPos, Vector3 goalCenter, out float signedLateralOffset, out float lateralDistance, out Vector3 puckToGoalDir)

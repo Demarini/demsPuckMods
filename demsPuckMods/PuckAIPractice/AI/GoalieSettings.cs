@@ -15,7 +15,7 @@
             }
         }
 
-        public GoalieDifficulty Difficulty { get; private set; } = GoalieDifficulty.Normal;
+        public GoalieDifficulty Difficulty { get; private set; } = GoalieDifficulty.Hard;
 
         // Dash logic
         public float DashCooldown { get; private set; }
@@ -40,7 +40,7 @@
             switch (difficulty)
             {
                 case GoalieDifficulty.Easy:
-                    DashCooldown = 1.2f;
+                    DashCooldown = 1f;
                     DashCancelGrace = 0.25f;
                     DashThreshold = 0.6f;
                     CancelThreshold = 0.08f;
@@ -51,8 +51,8 @@
                     break;
 
                 case GoalieDifficulty.Normal:
-                    DashCooldown = 0.8f;
-                    DashCancelGrace = 0.15f;
+                    DashCooldown = 1f;
+                    DashCancelGrace = 0.75f;
                     DashThreshold = 0.4f;
                     CancelThreshold = 0.05f;
                     ReactionTime = 0.15f;
@@ -62,14 +62,14 @@
                     break;
 
                 case GoalieDifficulty.Hard:
-                    DashCooldown = 0.5f;
+                    DashCooldown = 1f;
                     DashCancelGrace = 0.08f;
-                    DashThreshold = 0.25f;
+                    DashThreshold = 0.1f;
                     CancelThreshold = 0.02f;
                     ReactionTime = 0.05f;
-                    MaxRotationAngle = 90f;
+                    MaxRotationAngle = 30f;
                     RotationSpeed = 14f;
-                    DistanceFromNet = .25f;
+                    DistanceFromNet = .5f;
                     break;
             }
         }
