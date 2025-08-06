@@ -17,14 +17,12 @@ namespace PuckAIPractice.AI
         private float lastDashStartTime = -Mathf.Infinity;
         private float lastDashTime = -Mathf.Infinity;
         private bool dashLeftNext = true;
-        bool hasDashed = false;
         private PlayerBodyV2 body;
         private Vector3? targetCancelPosition = null;
         private float cancelInterpSpeed = 20f; // tweak this value to control smoothness
         private bool isPreparingDash = false;
-        private Quaternion targetDashRotation;
-        private float dashReadyThresholdDegrees = 5f;
-        private Vector3 pendingDashDirection;
+        private Vector3 pendingDashDir;
+        private float dashReadyThreshold = 5f; // degrees
         void Start()
         {
             Debug.Log("Goalie AI Started");
@@ -136,8 +134,10 @@ namespace PuckAIPractice.AI
                 float t = Mathf.InverseLerp(flattenEnd, flattenStart, puckToGoalDist);
                 maxAngleThisFrame = Mathf.Lerp(0f, GoalieSettings.Instance.MaxRotationAngle, t);
             }
-
-            RotateTowardPuck(toPuck, neutralForward, isBehindNet, maxAngleThisFrame, goalCenter, goalRight);
+            if (!isPreparingDash)
+            {
+                RotateTowardPuck(toPuck, neutralForward, isBehindNet, maxAngleThisFrame, goalCenter, goalRight);
+            }
             CreateArrow(ref netForwardArrow, Color.green);
             //CreateArrow(ref netToPuckArrow, Color.blue);
             Color dotColor = (forwardDot >= 0.5f) ? Color.green : Color.red;
@@ -153,7 +153,8 @@ namespace PuckAIPractice.AI
                 SimulateDashHelper.SignedLateralOffsetBlue = signedLateralOffset;
             }
             lastComputedIntercept = projectedPoint;
-            
+            Debug.Log($"[Update] Calling HandleDashLogic (isPreparingDash: {isPreparingDash})");
+            Debug.Log($"[NeutralRotation] {neutralRotation.eulerAngles}");
             HandleDashLogic(toPuck, neutralRotation, lateralDistance, signedLateralOffset, projectedPoint);
             UpdateInterceptVisual(projectedPoint);
             UpdatePuckLine(goalCenter, puckPos);
@@ -209,11 +210,19 @@ namespace PuckAIPractice.AI
                 Vector3 netToPuck = puckTransform.position - goalCenter;
                 float side = Vector3.Dot(netToPuck, goalRight); // Left or right of net center
 
-                Vector3 faceDir = (side < 0f) ? -goalRight : goalRight;
+                // Desired board-facing direction (based on side of net)
+                Vector3 desiredBoardDir = (side < 0f) ? -goalRight : goalRight;
 
+                // Clamp angle around neutral forward
+                float angleToBoard = Vector3.SignedAngle(neutralForward, desiredBoardDir, Vector3.up);
+                float clampedAngle2 = Mathf.Clamp(angleToBoard, -maxAngle, maxAngle);
+
+                Quaternion targetRotation2 = Quaternion.AngleAxis(clampedAngle2, Vector3.up) * Quaternion.LookRotation(neutralForward);
+
+                // Smooth rotate
                 body.transform.rotation = Quaternion.Slerp(
                     body.transform.rotation,
-                    Quaternion.LookRotation(faceDir, Vector3.up),
+                    targetRotation2,
                     Time.deltaTime * GoalieSettings.Instance.RotationSpeed
                 );
                 return;
@@ -260,175 +269,6 @@ namespace PuckAIPractice.AI
                 obj.GetComponent<Renderer>().material = mat;
                 obj.GetComponent<Renderer>().material.color = color;
             }
-        }
-        private Vector3 GetProjectedInterceptClampedPost(
-    Vector3 goaliePos,
-    Vector3 puckPos,
-    Vector3 goalCenter,
-    out float signedLateralOffset,
-    out float lateralDistance,
-    out Vector3 puckToGoalDir)
-        {
-            Vector3 puckToGoal = goalCenter - puckPos;
-            puckToGoalDir = puckToGoal.normalized;
-
-            Vector3 puckToGoalie = goaliePos - puckPos;
-            float projectedLength = Vector3.Dot(puckToGoalie, puckToGoalDir);
-            float forwardDot = Vector3.Dot((puckPos - goaliePos).normalized, puckToGoalDir);
-
-            // Clamp range for projection
-            projectedLength = Mathf.Clamp(projectedLength, 0f, 20f);
-
-            Vector3 projectedPoint = puckPos + puckToGoalDir * projectedLength;
-            projectedPoint.y = goaliePos.y;
-
-            Vector3 puckToGoalRight = Vector3.Cross(Vector3.up, puckToGoalDir);
-            Vector3 correctionVector = projectedPoint - goaliePos;
-
-            signedLateralOffset = Vector3.Dot(correctionVector, puckToGoalRight);
-            lateralDistance = correctionVector.magnitude;
-
-            // If puck is behind the goal or coming in too steep (bad angle)
-            if (forwardDot < 0.5f)
-            {
-                // Adjust these as needed
-                float postOffset = 2.5f;  // How far left/right from center
-                float goalDepthOffset = 1.0f; // How far forward (out of net)
-
-                float puckXFromCenter = puckPos.x - goalCenter.x;
-                float side = Mathf.Sign(puckXFromCenter);
-
-                signedLateralOffset = side * postOffset;
-                lateralDistance = Mathf.Abs(postOffset);
-
-                // Base anchor from the *goal line*, not the goalie position
-                Vector3 anchor = goalCenter + Vector3.right * signedLateralOffset;
-
-                // Push forward toward the ice (out of net)
-                anchor.z += (goalCenter.z > 0 ? -goalDepthOffset : goalDepthOffset);
-
-                // Keep Y flat with the goalie
-                anchor.y = goaliePos.y;
-
-                if (interceptTargetSphere != null)
-                    interceptTargetSphere.transform.position = anchor;
-
-                return anchor;
-            }
-
-            // Normal intercept logic
-            float maxLateral = 3.5f;
-            signedLateralOffset = Mathf.Clamp(signedLateralOffset, -maxLateral, maxLateral);
-            Vector3 finalOffset = puckToGoalRight * signedLateralOffset;
-
-            if (interceptTargetSphere != null)
-                interceptTargetSphere.transform.position = goaliePos + finalOffset;
-
-            return goaliePos + finalOffset;
-        }
-        private Vector3 GetProjectedInterceptOnGoalLine(
-    Vector3 goaliePos,
-    Vector3 puckPos,
-    Vector3 goalCenter,
-    PlayerTeam team,
-    out float signedLateralOffset,
-    out float lateralDistance,
-    out Vector3 puckToGoalDir)
-        {
-            // Use team to define goalie-side direction
-            Vector3 teamDirection = (team == PlayerTeam.Red) ? Vector3.back : Vector3.forward;
-            Vector3 teamRight = Vector3.right;
-
-            // Goalie line origin: a fixed distance in front of the goal, toward the ice
-            float goalieDepth = GoalieSettings.Instance.DistanceFromNet;
-            Vector3 goalieLineOrigin = goalCenter + teamDirection * goalieDepth;
-
-            // Direction from puck to goal (used for sliding and aligning movement)
-            puckToGoalDir = (goalCenter - puckPos).normalized;
-
-            // Vector from the goal line origin to the puck
-            Vector3 puckOffset = puckPos - goalieLineOrigin;
-
-            // How far left/right the puck is from the center line (dot with "right" vector)
-            float rawLateral = Vector3.Dot(puckOffset, teamRight);
-
-            // Clamp to avoid going outside posts
-            float maxLateral = 3.5f;
-            float clampedLateral = Mathf.Clamp(rawLateral, -maxLateral, maxLateral);
-
-            // Project lateral offset along goalie line
-            Vector3 interceptOnLine = goalieLineOrigin + teamRight * clampedLateral;
-
-            // Flatten to goalie height, do not move forward/back — goalie stays on line
-            Vector3 intercept = new Vector3(interceptOnLine.x, goaliePos.y, goalieLineOrigin.z);
-
-            // Outputs
-            signedLateralOffset = clampedLateral;
-            lateralDistance = (intercept - goaliePos).magnitude;
-
-            // Optional debug sphere
-            if (interceptTargetSphere != null)
-                interceptTargetSphere.transform.position = intercept;
-
-            // Debug Logging
-            Debug.Log($"[FixedGoalieLine]");
-            Debug.Log($"  team              : {team}");
-            Debug.Log($"  teamDirection     : {teamDirection}");
-            Debug.Log($"  teamRight         : {teamRight}");
-            Debug.Log($"  goalieLineOrigin  : {goalieLineOrigin}");
-            Debug.Log($"  puckOffset        : {puckOffset}");
-            Debug.Log($"  Raw Offset        : {rawLateral}");
-            Debug.Log($"  Clamped Offset    : {clampedLateral}");
-            Debug.Log($"  Intercept Point   : {intercept}");
-
-            return intercept;
-        }
-        private Vector3 GetProjectedInterceptOnGoalLine(
-    Vector3 goaliePos,
-    Vector3 puckPos,
-    Vector3 goalCenter,
-    out float signedLateralOffset,
-    out float lateralDistance,
-    out Vector3 puckToGoalDir)
-        {
-            // Assume goal is on the Z axis — red goal at +Z, blue goal at -Z
-            Vector3 teamDirection = (goalCenter.z > 0) ? Vector3.back : Vector3.forward; // Into the rink
-            Vector3 teamRight = Vector3.right * ((goalCenter.x >= 0) ? 1 : -1); // Right is always global right
-
-            // Set puckToGoalDir just for reference
-            puckToGoalDir = teamDirection;
-
-            // Fixed goalie line origin
-            float goalieDepth = GoalieSettings.Instance.DistanceFromNet;
-            Vector3 goalieLineOrigin = goalCenter + teamDirection * goalieDepth;
-
-            // Project puck to this line to determine offset
-            Vector3 puckOffset = puckPos - goalieLineOrigin;
-            float rawLateral = Vector3.Dot(puckOffset, teamRight);
-
-            float maxLateral = 3.5f;
-            float clampedLateral = Mathf.Clamp(rawLateral, -maxLateral, maxLateral);
-
-            Vector3 intercept = goalieLineOrigin + teamRight * clampedLateral;
-            intercept.y = goaliePos.y;
-
-            signedLateralOffset = clampedLateral;
-            lateralDistance = Vector3.Distance(goaliePos, intercept);
-
-            if (interceptTargetSphere != null)
-                interceptTargetSphere.transform.position = intercept;
-
-            // Debug
-            Debug.Log($"[FixedGoalieLine]");
-            Debug.Log($"  teamDirection     : {teamDirection}");
-            Debug.Log($"  teamRight         : {teamRight}");
-            Debug.Log($"  goalieLineOrigin  : {goalieLineOrigin}");
-            Debug.Log($"  puckOffset        : {puckOffset}");
-            Debug.Log($"  Raw Offset        : {rawLateral}");
-            Debug.Log($"  Clamped Offset    : {clampedLateral}");
-            Debug.Log($"  Intercept Point   : {intercept}");
-
-            return intercept;
         }
         private Vector3 GetProjectedInterceptClamped(
     Vector3 goaliePos,
@@ -536,32 +376,63 @@ namespace PuckAIPractice.AI
         {
             bool cooldownActive = Time.time < lastDashTime + GoalieSettings.Instance.DashCooldown;
             bool gracePeriodActive = Time.time < lastDashStartTime + GoalieSettings.Instance.DashCancelGrace;
+
+            // Start sliding
             controlledPlayer.PlayerInput.Client_SlideInputRpc(true);
-            if (lateralDistance > GoalieSettings.Instance.DashThreshold && !cooldownActive)
+
+            if (!cooldownActive && lateralDistance > GoalieSettings.Instance.DashThreshold && !isPreparingDash)
             {
-                body.transform.rotation = neutralRotation;
-                Debug.Log("Wants to Dash");
-                if (signedLateralOffset < 0)
-                {
-                    Debug.Log($"{controlledPlayer.Username.Value} Dashed Right");
-                    Debug.Log($"Is Sliding {controlledPlayer.PlayerInput.SlideInput.ClientValue} "); 
-                    controlledPlayer.PlayerInput.Client_DashRightInputRpc();
-                    hasDashed = true;
-                }
-                else
-                {
-                    Debug.Log(signedLateralOffset);
-                    Debug.Log($"{controlledPlayer.Username.Value} Dashed Left");
-                    Debug.Log($"Is Sliding {controlledPlayer.PlayerInput.SlideInput.ClientValue} ");
-                    controlledPlayer.PlayerInput.Client_DashLeftInputRpc();
-                    hasDashed = true;
-                }  
-                lastDashTime = Time.time;
+                Vector3 dashDir = signedLateralOffset < 0 ? Vector3.left : Vector3.right;
+                Vector3 teamRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right;
+                Vector3 dashWorldDir = teamRight * Mathf.Sign(signedLateralOffset);
+
+                pendingDashDir = dashWorldDir;   
+                isPreparingDash = true;
+
+                return;
             }
-            else if (hasDashed && Mathf.Abs(signedLateralOffset) <= GoalieSettings.Instance.CancelThreshold)
+            else
+            {
+                Debug.Log("Not ready for dashin yet bud!");
+                Debug.Log("Threshold:" + (lateralDistance > GoalieSettings.Instance.DashThreshold));
+                Debug.Log("Cooldown Active:" + cooldownActive);
+            }
+
+            // If we’re prepping to dash, wait until we’re aligned
+            if (isPreparingDash)
+            {
+                body.transform.rotation = Quaternion.RotateTowards(
+                    body.transform.rotation,
+                    neutralRotation,
+                    Time.deltaTime * GoalieSettings.Instance.RotationSpeed * 60f
+                );
+
+                float angle = Quaternion.Angle(body.transform.rotation, neutralRotation);
+                if (angle <= dashReadyThreshold)
+                {
+                    // Now dash in correct direction
+                    if ((pendingDashDir.x < 0 && controlledPlayer.Team.Value == PlayerTeam.Red) || (pendingDashDir.x >= 0 && controlledPlayer.Team.Value == PlayerTeam.Blue))
+                    {
+                        Debug.Log($"{controlledPlayer.Username.Value} Dashed Left");
+                        controlledPlayer.PlayerInput.Client_DashLeftInputRpc();
+                    }
+                    else
+                    {
+                        Debug.Log($"{controlledPlayer.Username.Value} Dashed Right");
+                        controlledPlayer.PlayerInput.Client_DashRightInputRpc();
+                    }
+                    lastDashTime = Time.time;
+                    isPreparingDash = false;
+                }
+
+
+                return;
+            }
+
+            // If we’ve already dashed and we’re aligned, cancel dash
+            if (Mathf.Abs(signedLateralOffset) <= GoalieSettings.Instance.CancelThreshold)
             {
                 body.CancelDash();
-                hasDashed = false;
                 targetCancelPosition = projectedPoint;
                 Debug.Log($"[GoalieAI] Perfect alignment, canceling dash. Offset = {signedLateralOffset:F2}");
             }

@@ -34,11 +34,11 @@ namespace PuckAIPractice.Patches
             var traverse = Traverse.Create(__instance);
 
             
-            Debug.Log($"[SimulateDash] Player {__instance.Player.Username.Value} using SimulateDashState instance: {state.GetInstanceID()}");
+            //debug.log($"[SimulateDash] Player {__instance.Player.Username.Value} using SimulateDashState instance: {state.GetInstanceID()}");
 
             if (!traverse.Field("canDash").GetValue<bool>() || !__instance.IsSliding.Value)
             {
-                Debug.Log("CAN NOT DASH");
+                //debug.log("CAN NOT DASH");
                 return false;
             }
 
@@ -57,10 +57,10 @@ namespace PuckAIPractice.Patches
             state.LegTween?.Kill();
 
             // Create and store new tweens
-            Debug.Log("DO MOVE");
-            Debug.Log("Dash Target" + dashTarget);
-            Debug.Log("Player Position" + rb.position);
-            Debug.Log("Is Kinematic" + rb.isKinematic);
+            //debug.log("DO MOVE");
+            //debug.log("Dash Target" + dashTarget);
+            //debug.log("Player Position" + rb.position);
+            //debug.log("Is Kinematic" + rb.isKinematic);
             //state.MoveTween = rb.DOMove(dashTarget, dashDragTime).SetEase(Ease.OutQuad);
             __instance.StartCoroutine(MoveFakePlayer(__instance, dashTarget, dashDragTime));
             traverse.Field("dashMoveTween").SetValue(state.MoveTween);
@@ -98,7 +98,7 @@ namespace PuckAIPractice.Patches
         public static float SignedLateralOffsetBlue;
         private static IEnumerator MoveFakePlayer(PlayerBodyV2 body, Vector3 target, float duration)
         {
-            Debug.Log("Starting Move Faker Player");
+            //debug.log("Starting Move Faker Player");
             const float slideTurnMultiplier = 2f;
             const float jumpTurnMultiplier = 5f;
             const float fallenDrag = 0.2f;
@@ -157,7 +157,7 @@ namespace PuckAIPractice.Patches
                 Vector3 moveDir = (pos - lastPosition).normalized;
                 Vector3 toTarget = (target - pos).normalized;
                 float alignment = Vector3.Dot(moveDir, toTarget);
-                Debug.Log($"[MoveFakePlayer] isBehindNet = {(body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed: IsBehindNetBlue)}, signedOffset = {(body.Player.Team.Value == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue)}, moveDir = {moveDir}");
+                //debug.log($"[MoveFakePlayer] isBehindNet = {(body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed: IsBehindNetBlue)}, signedOffset = {(body.Player.Team.Value == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue)}, moveDir = {moveDir}");
                 if ((body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed : IsBehindNetBlue))
                 {
                     Vector3 goalRight = body.Player.Team.Value == PlayerTeam.Red ? Vector3.left : Vector3.right;
@@ -167,25 +167,25 @@ namespace PuckAIPractice.Patches
                     if (moveDir.sqrMagnitude > 0.001f)
                     {
                         float directionalAlignment = Vector3.Dot(moveDir, goalRight * Mathf.Sign(signedOffset));
-                        Debug.Log($"[MoveFakePlayer] Directional alignment behind net = {directionalAlignment:F3}");
+                        //debug.log($"[MoveFakePlayer] Directional alignment behind net = {directionalAlignment:F3}");
 
                         // Now break ONLY if they’re moving the wrong way
                         if (directionalAlignment < -0.5f)
                         {
-                            Debug.Log("[MoveFakePlayer] Behind net — moving wrong direction!");
+                            //debug.log("[MoveFakePlayer] Behind net — moving wrong direction!");
                             break;
                         }
                     }
                 }
                 if (t > 0.05f && alignment < 0.5f && !(body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed : IsBehindNetBlue))
                 {
-                    Debug.Log($"[MoveFakePlayer] 🚨 Moving away from target!");
-                    Debug.Log($"Target Position: {target}");
-                    Debug.Log($"Current Position: {pos}");
-                    Debug.Log($"Last Position: {lastPosition}");
-                    Debug.Log($"MoveDir: {moveDir}, ToTarget: {toTarget}");
-                    Debug.Log($"Dot Alignment: {alignment:F3}, t: {t:F2}");
-                    Debug.Log($"[MoveFakePlayer] Moving away from target! Dot: {alignment:F3}, t: {t:F2}");
+                    //debug.log($"[MoveFakePlayer] 🚨 Moving away from target!");
+                    //debug.log($"Target Position: {target}");
+                    //debug.log($"Current Position: {pos}");
+                    //debug.log($"Last Position: {lastPosition}");
+                    //debug.log($"MoveDir: {moveDir}, ToTarget: {toTarget}");
+                    //debug.log($"Dot Alignment: {alignment:F3}, t: {t:F2}");
+                    //debug.log($"[MoveFakePlayer] Moving away from target! Dot: {alignment:F3}, t: {t:F2}");
                     break;
                 }
 
@@ -200,7 +200,7 @@ namespace PuckAIPractice.Patches
             // Snap to target if dash finished normally
             //if (state.IsDashing)
             //body.transform.position = target;
-            Debug.Log("Ending Dash!");
+            //debug.log("Ending Dash!");
             // 🛑 Clear dash state
             state.IsDashing = false;
             body.IsSliding.Value = false;
@@ -234,18 +234,18 @@ namespace PuckAIPractice.Patches
         [HarmonyPrefix]
         public static bool Prefix(PlayerBodyV2 __instance)
         {
-            Debug.Log(__instance.Player.OwnerClientId);
+            //debug.log(__instance.Player.OwnerClientId);
             if (!NetworkManager.Singleton.IsServer || !FakePlayerRegistry.IsFake(__instance.Player))
             {
-                Debug.Log("DASH RIGHT NOT FAKE PLAYER");
+                //debug.log("DASH RIGHT NOT FAKE PLAYER");
                 return true;
             }
             else
             {
-                Debug.Log("DASH RIGHT FAKE PLAYER");
+                //debug.log("DASH RIGHT FAKE PLAYER");
             }
 
-            Debug.Log("Simulate Dash Right" + __instance.Player.Username + __instance.Player.OwnerClientId);
+            //debug.log("Simulate Dash Right" + __instance.Player.Username + __instance.Player.OwnerClientId);
             return !SimulateDash(__instance, __instance.transform.right);
         }
     }
@@ -257,16 +257,16 @@ namespace PuckAIPractice.Patches
         {
             if (!NetworkManager.Singleton.IsServer || !FakePlayerRegistry.IsFake(__instance.Player))
             {
-                Debug.Log("DASH LEFT NOT FAKE PLAYER");
+                //debug.log("DASH LEFT NOT FAKE PLAYER");
                 return true;
             }
             else
             {
-                Debug.Log("DASH LEFT FAKE PLAYER");
+                //debug.log("DASH LEFT FAKE PLAYER");
             }
                 
 
-            Debug.Log("Simulate Dash Left" + __instance.Player.Username + __instance.Player.OwnerClientId);
+            //debug.log("Simulate Dash Left" + __instance.Player.Username + __instance.Player.OwnerClientId);
             return !SimulateDash(__instance, -__instance.transform.right);
         }
     }
@@ -282,37 +282,37 @@ namespace PuckAIPractice.Patches
             // Only override for fake players
             if (!FakePlayerRegistry.IsFake(__instance.Player))
             {
-                Debug.Log(__instance.Player.OwnerClientId.ToString());
-                Debug.Log(__instance.Player.Username.Value.ToString());
-                Debug.Log("NOT FAKE PLAYER");
+                //debug.log(__instance.Player.OwnerClientId.ToString());
+                //debug.log(__instance.Player.Username.Value.ToString());
+                //debug.log("NOT FAKE PLAYER");
                 return true;
             }
             else
             {
-                Debug.Log("FAKE PLAYER");
+                //debug.log("FAKE PLAYER");
             }
                 // run original for real players
 
-            Debug.Log("[CancelDash] Cancelling dash and killing tweens");
+            //debug.log("[CancelDash] Cancelling dash and killing tweens");
             var state = __instance.GetComponent<SimulateDashState>();
             if (state == null)
             {
-                Debug.LogWarning($"[CancelDash] SimulateDashState was missing on {__instance.name}");
+                //debug.logWarning($"[CancelDash] SimulateDashState was missing on {__instance.name}");
                 return false; // or true, depending on whether you want to run original
             }
             // Kill and null move tween
             state.MoveTween?.Kill();
-            Debug.Log($"[CancelDash] dashMoveTween isActive: {state.MoveTween?.active}, isPlaying: {state.MoveTween?.IsPlaying()}");
+            //debug.log($"[CancelDash] dashMoveTween isActive: {state.MoveTween?.active}, isPlaying: {state.MoveTween?.IsPlaying()}");
             state.MoveTween = null;
 
             // Kill and null drag tween
             state.DragTween?.Kill();
-            Debug.Log($"[CancelDash] dashDragTween isActive: {state.DragTween?.active}, isPlaying: {state.DragTween?.IsPlaying()}");
+            //debug.log($"[CancelDash] dashDragTween isActive: {state.DragTween?.active}, isPlaying: {state.DragTween?.IsPlaying()}");
             state.DragTween = null;
 
             // Kill and null leg pad tween
             state.LegTween?.Kill();
-            Debug.Log($"[CancelDash] dashLegPadTween isActive: {state.LegTween?.active}, isPlaying: {state.LegTween?.IsPlaying()}");
+            //debug.log($"[CancelDash] dashLegPadTween isActive: {state.LegTween?.active}, isPlaying: {state.LegTween?.IsPlaying()}");
             state.LegTween = null;
 
             state.IsDashing = false;
@@ -407,7 +407,7 @@ namespace PuckAIPractice.Patches
             //}
             //catch
             //{
-            //    Debug.Log("Player Mesh Busted");
+            //    //debug.log("Player Mesh Busted");
             //}
 
 
@@ -427,11 +427,11 @@ namespace PuckAIPractice.Patches
                     __instance.GetType()
         .GetMethod("HandleInputs", BindingFlags.Instance | BindingFlags.NonPublic)
         ?.Invoke(__instance, new object[] { playerInput });
-                    //Debug.Log("Finished Handle Inputs");
+                    ////debug.log("Finished Handle Inputs");
                 }
                 catch
                 {
-                    Debug.Log("YO HANDLE INPUTS WASSUP");
+                    //debug.log("YO HANDLE INPUTS WASSUP");
                 }
 
             }

@@ -14,9 +14,11 @@ namespace PuckAIPractice.GameModes
         public static bool GoaliesAreRunning = false;
         public static IEnumerator StartGoalieSession()
         {
-            BotSpawning.SpawnFakePlayer(1, PlayerRole.Goalie, PlayerTeam.Red);
-            yield return new WaitForSeconds(1f);
             BotSpawning.SpawnFakePlayer(0, PlayerRole.Goalie, PlayerTeam.Blue);
+            yield return new WaitForSeconds(.1f);
+            BotSpawning.SpawnFakePlayer(1, PlayerRole.Goalie, PlayerTeam.Red);
+            
+            
             //Debug.Log($"[BotSpawning] Fake registry contains {FakePlayerRegistry.All.Count()} bots");
 
             GoaliesAreRunning = true;
