@@ -21,6 +21,10 @@ namespace PuckAIPractice.AI
         private PlayerBodyV2 body;
         private Vector3? targetCancelPosition = null;
         private float cancelInterpSpeed = 20f; // tweak this value to control smoothness
+        private bool isPreparingDash = false;
+        private Quaternion targetDashRotation;
+        private float dashReadyThresholdDegrees = 5f;
+        private Vector3 pendingDashDirection;
         void Start()
         {
             Debug.Log("Goalie AI Started");
@@ -90,9 +94,7 @@ namespace PuckAIPractice.AI
 
             Vector3 toPuck = puckPos - goaliePos;
             toPuck.y = 0f;
-
-            RotateTowardPuck(toPuck, neutralForward);
-
+          
             Vector3 goalCenter = (controlledPlayer.Team.Value == PlayerTeam.Red) ? redGoal : blueGoal;
             Vector3 goalieToPuck = puckPos - goaliePos;
             Vector3 goalieForward = neutralForward;
@@ -121,6 +123,21 @@ namespace PuckAIPractice.AI
                     SimulateDashHelper.IsBehindNetBlue = true;
                 }
             }
+            float maxAngleThisFrame = GoalieSettings.Instance.MaxRotationAngle;
+
+            // Skip flattening if puck is behind net
+            Vector3 goalRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right;
+            bool isBehindNet = forwardDot < 0.5f;
+            if (!isBehindNet)
+            {
+                float puckToGoalDist = Vector3.Distance(puckPos, goalCenter);
+                float flattenStart = 6f;
+                float flattenEnd = 2.5f;
+                float t = Mathf.InverseLerp(flattenEnd, flattenStart, puckToGoalDist);
+                maxAngleThisFrame = Mathf.Lerp(0f, GoalieSettings.Instance.MaxRotationAngle, t);
+            }
+
+            RotateTowardPuck(toPuck, neutralForward, isBehindNet, maxAngleThisFrame, goalCenter, goalRight);
             CreateArrow(ref netForwardArrow, Color.green);
             //CreateArrow(ref netToPuckArrow, Color.blue);
             Color dotColor = (forwardDot >= 0.5f) ? Color.green : Color.red;
@@ -178,13 +195,36 @@ namespace PuckAIPractice.AI
             return controlledPlayer.Team.Value == PlayerTeam.Red ? Vector3.forward : Vector3.back;
         }
 
-        private void RotateTowardPuck(Vector3 toPuck, Vector3 neutralForward)
+        private void RotateTowardPuck(
+    Vector3 toPuck,
+    Vector3 neutralForward,
+    bool isBehindNet,
+    float maxAngle,
+    Vector3 goalCenter,
+    Vector3 goalRight)
         {
+            if (isBehindNet)
+            {
+                // Puck is behind the net — figure out which post to pin to (based on net center)
+                Vector3 netToPuck = puckTransform.position - goalCenter;
+                float side = Vector3.Dot(netToPuck, goalRight); // Left or right of net center
+
+                Vector3 faceDir = (side < 0f) ? -goalRight : goalRight;
+
+                body.transform.rotation = Quaternion.Slerp(
+                    body.transform.rotation,
+                    Quaternion.LookRotation(faceDir, Vector3.up),
+                    Time.deltaTime * GoalieSettings.Instance.RotationSpeed
+                );
+                return;
+            }
+
             if (toPuck.sqrMagnitude <= 0.01f) return;
 
+            // Normal front-of-net rotation logic
             Vector3 desiredDir = toPuck.normalized;
             float angleBetween = Vector3.SignedAngle(neutralForward, desiredDir, Vector3.up);
-            float clampedAngle = Mathf.Clamp(angleBetween, -GoalieSettings.Instance.MaxRotationAngle, GoalieSettings.Instance.MaxRotationAngle);
+            float clampedAngle = Mathf.Clamp(angleBetween, -maxAngle, maxAngle);
             Quaternion targetRotation = Quaternion.AngleAxis(clampedAngle, Vector3.up) * Quaternion.LookRotation(neutralForward);
 
             body.transform.rotation = Quaternion.Slerp(

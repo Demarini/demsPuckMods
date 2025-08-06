@@ -67,7 +67,7 @@
                     DashThreshold = 0.1f;
                     CancelThreshold = 0.02f;
                     ReactionTime = 0.05f;
-                    MaxRotationAngle = 30f;
+                    MaxRotationAngle = 90f;
                     RotationSpeed = 14f;
                     DistanceFromNet = .5f;
                     break;
