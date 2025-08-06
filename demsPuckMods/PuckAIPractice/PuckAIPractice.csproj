@@ -50,6 +50,7 @@
   <ItemGroup>
     <Compile Include="AI\GoalieAI.cs" />
     <Compile Include="AI\GoalieSettings.cs" />
+    <Compile Include="GameModes\GoalieRunner.cs" />
     <Compile Include="GameModes\Goalies.cs" />
     <Compile Include="Patches\BotInputPatch.cs" />
     <Compile Include="Patches\PlayerSearch.cs" />

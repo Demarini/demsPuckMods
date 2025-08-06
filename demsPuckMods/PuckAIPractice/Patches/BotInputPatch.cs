@@ -5,6 +5,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Netcode;
@@ -21,6 +22,8 @@ namespace PuckAIPractice.Patches
             public Tween MoveTween;
             public Tween DragTween;
             public Tween LegTween;
+
+            public bool IsDashing;
         }
         public static bool SimulateDash(PlayerBodyV2 __instance, Vector3 dashDir)
         {
@@ -28,9 +31,16 @@ namespace PuckAIPractice.Patches
                         __instance.gameObject.AddComponent<SimulateDashState>();
             var traverse = Traverse.Create(__instance);
 
-            if (!traverse.Field("canDash").GetValue<bool>() || !__instance.IsSliding.Value)
-                return false;
+            
+            Debug.Log($"[SimulateDash] Player {__instance.Player.Username.Value} using SimulateDashState instance: {state.GetInstanceID()}");
 
+            if (!traverse.Field("canDash").GetValue<bool>() || !__instance.IsSliding.Value)
+            {
+                Debug.Log("CAN NOT DASH");
+                return false;
+            }
+
+            state.IsDashing = true;
             float stamina = __instance.Stamina;
             float dashStaminaDrain = traverse.Field("dashStaminaDrain").GetValue<float>();
 
@@ -45,7 +55,12 @@ namespace PuckAIPractice.Patches
             state.LegTween?.Kill();
 
             // Create and store new tweens
-            state.MoveTween = rb.DOMove(dashTarget, dashDragTime).SetEase(Ease.OutQuad);
+            Debug.Log("DO MOVE");
+            Debug.Log("Dash Target" + dashTarget);
+            Debug.Log("Player Position" + rb.position);
+            Debug.Log("Is Kinematic" + rb.isKinematic);
+            //state.MoveTween = rb.DOMove(dashTarget, dashDragTime).SetEase(Ease.OutQuad);
+            __instance.StartCoroutine(MoveFakePlayer(__instance, dashTarget, dashDragTime));
             traverse.Field("dashMoveTween").SetValue(state.MoveTween);
 
             state.DragTween = DOTween.To(() => __instance.Movement.AmbientDrag,
@@ -54,7 +69,7 @@ namespace PuckAIPractice.Patches
                                     .OnComplete(() => __instance.HasDashed = false)
                                     .SetEase(Ease.Linear);
             traverse.Field("dashDragTween").SetValue(state.DragTween);
-
+            
             state.LegTween = DOVirtual.DelayedCall(dashDragTime / 4f, () =>
             {
                 __instance.HasDashExtended = false;
@@ -69,6 +84,108 @@ namespace PuckAIPractice.Patches
             __instance.IsExtendedRight.Value = dashDir.x > 0;
 
             return true;
+        }
+        private static readonly MethodInfo updateAudioMethod = typeof(PlayerBodyV2)
+    .GetMethod("Server_UpdateAudio", BindingFlags.Instance | BindingFlags.NonPublic);
+        static Vector3 redNetCenter = new Vector3(0.0f, 0.8f, -40.23f);
+        static Vector3 blueNetCenter = new Vector3(0.0f, 0.8f, 40.23f);
+        static float overshootDistanceThreshold = 2f;
+        private static IEnumerator MoveFakePlayer(PlayerBodyV2 body, Vector3 target, float duration)
+        {
+            const float slideTurnMultiplier = 2f;
+            const float jumpTurnMultiplier = 5f;
+            const float fallenDrag = 0.2f;
+            const float stopDrag = 2.5f;
+            const float slideDrag = 0.2f;
+            const float hoverDistance = 1.2f;
+            const float slideHoverDistance = 0.8f;
+            float elapsed = 0f;
+            Vector3 start = body.transform.position;
+            Vector3 dashDir = Vector3.right * Mathf.Sign((target - start).x);
+            var state = body.GetComponent<SimulateDashState>() ??
+                        body.gameObject.AddComponent<SimulateDashState>();
+            state.IsDashing = true;
+
+            // Start dash state
+            body.IsSliding.Value = true;
+            body.HasSlipped = true;
+            body.HasFallen = false;
+            //body.Rigidbody.velocity = (target - start).normalized * 5f;
+            body.Speed = body.Movement.Speed; // Set manually if Movement.Speed is spoofed
+
+            body.Movement.Sprint = body.IsSprinting.Value;
+            body.Movement.TurnMultiplier = body.IsSliding.Value ? slideTurnMultiplier :
+                                            body.IsJumping ? jumpTurnMultiplier : 1f;
+
+            body.Movement.AmbientDrag = body.HasFallen ? fallenDrag :
+                                         body.HasDashed ? body.Movement.AmbientDrag :
+                                         body.IsStopping.Value ? stopDrag :
+                                         body.IsSliding.Value ? slideDrag : 0f;
+
+            body.Hover.TargetDistance = body.IsSliding.Value ? slideHoverDistance :
+                                        body.KeepUpright.Balance * hoverDistance;
+
+            body.Skate.Intensity = (body.IsSliding.Value || body.IsStopping.Value || !body.IsGrounded) ?
+                                    0f : body.KeepUpright.Balance;
+
+            body.VelocityLean.AngularIntensity = Mathf.Max(0.1f, body.Movement.NormalizedMaximumSpeed) /
+                                                 (body.IsSliding.Value ? 2f : (body.IsJumping ? 2f : 1f));
+
+            body.VelocityLean.Inverted = !body.IsJumping && !body.IsSliding.Value && body.Movement.IsMovingBackwards;
+            body.VelocityLean.UseWorldLinearVelocity = body.IsJumping || body.IsSliding.Value;
+            // 🔊 Start audio
+            updateAudioMethod?.Invoke(body, null);
+
+            Vector3 lastPosition = start;
+
+            while (elapsed < duration && state.IsDashing)
+            {
+                Vector3 netPos = body.Player.Team.Value == PlayerTeam.Red ? redNetCenter : blueNetCenter;
+                Vector3 pos = body.transform.position;
+                pos.y = 0f;
+                target.y = 0f;
+
+                elapsed += Time.deltaTime;
+                float t = Mathf.Clamp01(elapsed / duration); // ⬅️ this must come *before* using `t`
+
+                Vector3 moveDir = (pos - lastPosition).normalized;
+                Vector3 toTarget = (target - pos).normalized;
+                float alignment = Vector3.Dot(dashDir, toTarget);
+                if (t > 0.05f && alignment < -0.001f)
+                {
+                    Debug.Log($"[MoveFakePlayer] 🚨 Moving away from target!");
+                    Debug.Log($"Target Position: {target}");
+                    Debug.Log($"Current Position: {pos}");
+                    Debug.Log($"Last Position: {lastPosition}");
+                    Debug.Log($"MoveDir: {moveDir}, ToTarget: {toTarget}");
+                    Debug.Log($"Dot Alignment: {alignment:F3}, t: {t:F2}");
+                    Debug.Log($"[MoveFakePlayer] Moving away from target! Dot: {alignment:F3}, t: {t:F2}");
+                    break;
+                }
+
+                lastPosition = pos;
+
+                body.transform.position = Vector3.Lerp(start, target, EaseOutQuad(t));
+                updateAudioMethod?.Invoke(body, null);
+
+                yield return null;
+            }
+
+            // Snap to target if dash finished normally
+            //if (state.IsDashing)
+            //body.transform.position = target;
+
+            // 🛑 Clear dash state
+            state.IsDashing = false;
+            body.IsSliding.Value = false;
+            body.HasSlipped = false;
+            //body.Rigidbody.velocity = Vector3.zero;
+            // 🔇 One final audio update to cut the sliding
+            updateAudioMethod?.Invoke(body, null);
+        }
+        private static float EaseOutQuad(float t)
+        {
+            return 1 - (1 - t) * (1 - t);
         }
     }
         
@@ -91,10 +208,19 @@ namespace PuckAIPractice.Patches
         [HarmonyPrefix]
         public static bool Prefix(PlayerBodyV2 __instance)
         {
+            Debug.Log(__instance.Player.OwnerClientId);
             if (!NetworkManager.Singleton.IsServer || !FakePlayerRegistry.IsFake(__instance.Player))
+            {
+                Debug.Log("DASH RIGHT NOT FAKE PLAYER");
                 return true;
+            }
+            else
+            {
+                Debug.Log("DASH RIGHT FAKE PLAYER");
+            }
 
-            return !SimulateDashHelper.SimulateDash(__instance, __instance.transform.right);
+            Debug.Log("Simulate Dash Right" + __instance.Player.Username + __instance.Player.OwnerClientId);
+            return !SimulateDash(__instance, __instance.transform.right);
         }
     }
     [HarmonyPatch(typeof(PlayerBodyV2), "DashLeft")]
@@ -104,9 +230,18 @@ namespace PuckAIPractice.Patches
         public static bool Prefix(PlayerBodyV2 __instance)
         {
             if (!NetworkManager.Singleton.IsServer || !FakePlayerRegistry.IsFake(__instance.Player))
+            {
+                Debug.Log("DASH LEFT NOT FAKE PLAYER");
                 return true;
+            }
+            else
+            {
+                Debug.Log("DASH LEFT FAKE PLAYER");
+            }
+                
 
-            return !SimulateDashHelper.SimulateDash(__instance, -__instance.transform.right);
+            Debug.Log("Simulate Dash Left" + __instance.Player.Username + __instance.Player.OwnerClientId);
+            return !SimulateDash(__instance, -__instance.transform.right);
         }
     }
     [HarmonyPatch(typeof(PlayerBodyV2), "CancelDash")]
@@ -120,10 +255,25 @@ namespace PuckAIPractice.Patches
 
             // Only override for fake players
             if (!FakePlayerRegistry.IsFake(__instance.Player))
-                return true; // run original for real players
+            {
+                Debug.Log(__instance.Player.OwnerClientId.ToString());
+                Debug.Log(__instance.Player.Username.Value.ToString());
+                Debug.Log("NOT FAKE PLAYER");
+                return true;
+            }
+            else
+            {
+                Debug.Log("FAKE PLAYER");
+            }
+                // run original for real players
 
             Debug.Log("[CancelDash] Cancelling dash and killing tweens");
             var state = __instance.GetComponent<SimulateDashState>();
+            if (state == null)
+            {
+                Debug.LogWarning($"[CancelDash] SimulateDashState was missing on {__instance.name}");
+                return false; // or true, depending on whether you want to run original
+            }
             // Kill and null move tween
             state.MoveTween?.Kill();
             Debug.Log($"[CancelDash] dashMoveTween isActive: {state.MoveTween?.active}, isPlaying: {state.MoveTween?.IsPlaying()}");
@@ -139,6 +289,7 @@ namespace PuckAIPractice.Patches
             Debug.Log($"[CancelDash] dashLegPadTween isActive: {state.LegTween?.active}, isPlaying: {state.LegTween?.IsPlaying()}");
             state.LegTween = null;
 
+            state.IsDashing = false;
             // Reset state
             __instance.HasDashed = false;
             __instance.HasDashExtended = false;
@@ -185,6 +336,149 @@ namespace PuckAIPractice.Patches
             {
                 return $"<b><color=#00AAFF>BOT ROLE</color></b>";
             }
+        }
+    }
+    [HarmonyPatch(typeof(PlayerBodyV2), "FixedUpdate")]
+    public static class PlayerBodyV2_FixedUpdate_Patch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(PlayerBodyV2 __instance)
+        {
+            if (FakePlayerRegistry.IsFake(__instance.Player))
+            {
+                RunCustomFixedUpdate(__instance);
+                return false; // skip original
+            }
+
+            return true; // allow original to run
+        }
+
+        private static void RunCustomFixedUpdate(PlayerBodyV2 __instance)
+        {
+            if (!__instance.Player)
+                return;
+
+            var playerInput = __instance.Player.PlayerInput;
+            if (!playerInput)
+                return;
+            var traverse = Traverse.Create(__instance);
+            //try
+            //{
+            //    var playerMeshObj = traverse.Field("playerMesh").GetValue();
+            //    Transform playerMesh = Traverse.Create(playerMeshObj).Property("transform").GetValue<Transform>();
+            //    if (playerInput.LookInput.ServerValue || playerInput.TrackInput.ServerValue)
+            //    {
+            //        if (__instance.PlayerCamera)
+            //        {
+            //            Vector3 lookTarget = __instance.PlayerCamera.transform.position + __instance.PlayerCamera.transform.forward * 10f;
+            //            playerMesh.LookAt(lookTarget);
+            //        }
+            //    }
+            //    else if (__instance.Stick)
+            //    {
+            //        playerMesh.LookAt(__instance.Stick.BladeHandlePosition);
+            //    }
+            //}
+            //catch
+            //{
+            //    Debug.Log("Player Mesh Busted");
+            //}
+
+
+            //    float b = __instance.IsJumping ? 1.05f : (__instance.IsSliding.Value ? 0.95f : 1f);
+
+            //    var stretchSpeed = Traverse.Create(__instance).Field("stretchSpeed").GetValue<float>();
+            //    __instance.PlayerMesh.Stretch = Mathf.Lerp(__instance.PlayerMesh.Stretch, b, Time.fixedDeltaTime * stretchSpeed);
+
+            //    if (!NetworkManager.Singleton.IsServer)
+            //        return;
+
+            if (!__instance.Player.IsReplay.Value)
+            {
+                try
+                {
+                    var handleInputs = traverse.Method("HandleInputs", new Type[] { typeof(PlayerInput) });
+                    __instance.GetType()
+        .GetMethod("HandleInputs", BindingFlags.Instance | BindingFlags.NonPublic)
+        ?.Invoke(__instance, new object[] { playerInput });
+                    //Debug.Log("Finished Handle Inputs");
+                }
+                catch
+                {
+                    Debug.Log("YO HANDLE INPUTS WASSUP");
+                }
+
+            }
+
+            //    __instance.Speed = __instance.Movement.Speed;
+
+            //    var sprintDrain = Traverse.Create(__instance).Field("sprintStaminaDrainRate").GetValue<float>();
+            //    if (__instance.IsSprinting.Value)
+            //    {
+            //        __instance.Stamina -= Time.deltaTime / sprintDrain;
+            //    }
+            //    else if (__instance.Stamina < 1f)
+            //    {
+            //        var regenRate = Traverse.Create(__instance).Field("staminaRegenerationRate").GetValue<float>();
+            //        __instance.Stamina = Mathf.Clamp(__instance.Stamina + Time.fixedDeltaTime / regenRate, 0f, 1f);
+            //    }
+
+            //    if (__instance.IsUpright)
+            //    {
+            //        float gravity = -Physics.gravity.y;
+            //        float gravityMultiplier = Traverse.Create(__instance).Field("gravityMultiplier").GetValue<float>();
+            //        //__instance.Rigidbody.AddForce(Vector3.up * gravity, ForceMode.Acceleration);
+            //        //__instance.Rigidbody.AddForce(Vector3.down * gravity * gravityMultiplier, ForceMode.Acceleration);
+            //    }
+
+            //    __instance.MovementDirection.localRotation = Quaternion.FromToRotation(
+            //        __instance.transform.forward,
+            //        Utils.Vector3Slerp3(-__instance.transform.right, __instance.transform.forward, __instance.transform.right, __instance.Laterality));
+
+            //    __instance.Movement.Sprint = __instance.IsSprinting.Value;
+            //    __instance.Movement.TurnMultiplier = (__instance.IsSliding.Value ?
+            //        Traverse.Create(__instance).Field("slideTurnMultiplier").GetValue<float>() :
+            //        (__instance.IsJumping ? Traverse.Create(__instance).Field("jumpTurnMultiplier").GetValue<float>() : 1f));
+
+            //    var fallenDrag = Traverse.Create(__instance).Field("fallenDrag").GetValue<float>();
+            //    var stopDrag = Traverse.Create(__instance).Field("stopDrag").GetValue<float>();
+            //    var slideDrag = Traverse.Create(__instance).Field("slideDrag").GetValue<float>();
+
+            //    __instance.Movement.AmbientDrag = __instance.HasFallen ?
+            //        fallenDrag : (__instance.HasDashed ?
+            //        __instance.Movement.AmbientDrag : (__instance.IsStopping.Value ? stopDrag : (__instance.IsSliding.Value ? slideDrag : 0f)));
+
+            //    float slideHover = Traverse.Create(__instance).Field("slideHoverDistance").GetValue<float>();
+            //    float hoverDistance = Traverse.Create(__instance).Field("hoverDistance").GetValue<float>();
+
+            //    __instance.Hover.TargetDistance = __instance.IsSliding.Value ? slideHover : (__instance.KeepUpright.Balance * hoverDistance);
+
+            //    __instance.Skate.Intensity = (__instance.IsSliding.Value || __instance.IsStopping.Value || !__instance.IsGrounded) ? 0f : __instance.KeepUpright.Balance;
+
+            //    __instance.VelocityLean.AngularIntensity = Mathf.Max(0.1f, __instance.Movement.NormalizedMaximumSpeed) /
+            //        (__instance.IsSliding.Value ? 2f : (__instance.IsJumping ? 2f : 1f));
+
+            //    __instance.VelocityLean.Inverted = !__instance.IsJumping && !__instance.IsSliding.Value && __instance.Movement.IsMovingBackwards;
+            //    __instance.VelocityLean.UseWorldLinearVelocity = __instance.IsJumping || __instance.IsSliding.Value;
+
+            //    if (!__instance.HasSlipped && !__instance.HasFallen && __instance.IsSlipping)
+            //    {
+            //        __instance.OnSlip();
+            //    }
+            //    else if (__instance.HasSlipped && !__instance.HasFallen && __instance.IsSideways)
+            //    {
+            //        __instance.OnFall();
+            //    }
+            //    else if (__instance.HasFallen && !__instance.HasSlipped && __instance.IsUpright)
+            //    {
+            //        __instance.OnStandUp();
+            //    }
+            //    __instance.IsSliding.Value = true;
+            //    __instance.HasSlipped = true;
+            //    __instance.HasFallen = false;
+            // private method, invoke manually
+            var audioMethod = typeof(PlayerBodyV2).GetMethod("Server_UpdateAudio", BindingFlags.Instance | BindingFlags.NonPublic);
+            audioMethod?.Invoke(__instance, null);
         }
     }
 }

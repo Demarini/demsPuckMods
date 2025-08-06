@@ -35,7 +35,7 @@ namespace PuckAIPractice.Patches
                 Debug.Log($"[GOALIES] Command issued by {sender.Username.Value}");
                 if (!Goalies.GoaliesAreRunning)
                 {
-                    Goalies.StartGoalieSession();
+                    Goalies.StartGoalieSessionViaCoroutine();
                 }
                 else
                 {

@@ -45,7 +45,7 @@
                     DashThreshold = 0.6f;
                     CancelThreshold = 0.08f;
                     ReactionTime = 0.25f;
-                    MaxRotationAngle = 60f;
+                    MaxRotationAngle = 45f;
                     RotationSpeed = 6f;
                     DistanceFromNet = 1f;
                     break;
@@ -56,7 +56,7 @@
                     DashThreshold = 0.4f;
                     CancelThreshold = 0.05f;
                     ReactionTime = 0.15f;
-                    MaxRotationAngle = 45f;
+                    MaxRotationAngle = 60f;
                     RotationSpeed = 10f;
                     DistanceFromNet = .75f;
                     break;
@@ -67,7 +67,7 @@
                     DashThreshold = 0.25f;
                     CancelThreshold = 0.02f;
                     ReactionTime = 0.05f;
-                    MaxRotationAngle = 30f;
+                    MaxRotationAngle = 90f;
                     RotationSpeed = 14f;
                     DistanceFromNet = .25f;
                     break;

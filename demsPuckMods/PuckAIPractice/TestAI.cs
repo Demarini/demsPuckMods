@@ -1,5 +1,6 @@
 ﻿using DG.Tweening.Core.Easing;
 using HarmonyLib;
+using PuckAIPractice.GameModes;
 using PuckAIPractice.Utilities;
 using System;
 using System.Collections;
@@ -22,6 +23,7 @@ namespace PuckAIPractice
             Debug.Log("[PuckAIPractice] Enabled");
             try
             {
+                GoalieRunner.Initialize();
                 harmony.PatchAll();
                 //HarmonyLogger.PatchSpecificMethods(harmony, typeof(Player), new List<string>() { "OnNetworkSpawn", "OnNetworkPostSpawn", "Client_SetPlayerStateRpc", "Server_RespawnCharacter", "Server_DespawnCharacter" });
                 //HarmonyLogger.PatchAllMethods(harmony, typeof(UIManager));
