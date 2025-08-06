@@ -51,25 +51,25 @@
                     break;
 
                 case GoalieDifficulty.Normal:
-                    DashCooldown = 1f;
+                    DashCooldown = .6f;
                     DashCancelGrace = 0.15f;
                     DashThreshold = 0.4f;
                     CancelThreshold = 0.05f;
                     ReactionTime = 0.15f;
                     MaxRotationAngle = 60f;
                     RotationSpeed = 12f;
-                    DistanceFromNet = .6f;
+                    DistanceFromNet = .7f;
                     break;
 
                 case GoalieDifficulty.Hard:
-                    DashCooldown = 1f;
-                    DashCancelGrace = 0.08f;
-                    DashThreshold = 0.1f;
-                    CancelThreshold = 0.02f;
-                    ReactionTime = 0.05f;
-                    MaxRotationAngle = 90f;
+                    DashCooldown = .2f;
+                    DashCancelGrace = 0.15f;
+                    DashThreshold = 0.2f;
+                    CancelThreshold = 0.05f;
+                    ReactionTime = 0.15f;
+                    MaxRotationAngle = 80f;
                     RotationSpeed = 18f;
-                    DistanceFromNet = .25f;
+                    DistanceFromNet = .4f;
                     break;
             }
         }

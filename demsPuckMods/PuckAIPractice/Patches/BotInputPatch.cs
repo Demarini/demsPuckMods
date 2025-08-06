@@ -96,9 +96,11 @@ namespace PuckAIPractice.Patches
         public static float SignedLateralOffsetRed;
         public static bool IsBehindNetBlue;
         public static float SignedLateralOffsetBlue;
+        public static Vector3 ProjectedPointRed;
+        public static Vector3 ProjectedPointBlue;
         private static IEnumerator MoveFakePlayer(PlayerBodyV2 body, Vector3 target, float duration)
         {
-            //debug.log("Starting Move Faker Player");
+            Debug.Log("Starting Move Faker Player");
             const float slideTurnMultiplier = 2f;
             const float jumpTurnMultiplier = 5f;
             const float fallenDrag = 0.2f;
@@ -108,7 +110,8 @@ namespace PuckAIPractice.Patches
             const float slideHoverDistance = 0.8f;
             float elapsed = 0f;
             Vector3 start = body.transform.position;
-
+            List<Vector3> positionHistory = new List<Vector3>();
+            const int maxHistoryFrames = 5; // Tune as needed
             var state = body.GetComponent<SimulateDashState>() ??
                         body.gameObject.AddComponent<SimulateDashState>();
             state.IsDashing = true;
@@ -144,19 +147,40 @@ namespace PuckAIPractice.Patches
             updateAudioMethod?.Invoke(body, null);
             GoalieAI goalieAI = body.GetComponent<GoalieAI>();
             Vector3 lastPosition = start;
+            Debug.Log("Target Position: " + (body.Player.Team.Value == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue));
+            Debug.Log("Last Position: " + lastPosition);
             while (elapsed < duration && state.IsDashing)
             {
                 Vector3 netPos = body.Player.Team.Value == PlayerTeam.Red ? redNetCenter : blueNetCenter;
                 Vector3 pos = body.transform.position;
+                positionHistory.Add(pos);
+                if (positionHistory.Count > maxHistoryFrames)
+                    positionHistory.RemoveAt(0);
+
+                // Only calculate if we have enough samples
+                Vector3 historyMoveDir = Vector3.zero;
+                if (positionHistory.Count >= 2)
+                {
+                    historyMoveDir = (pos - positionHistory[0]).normalized;
+                }
+                float prevDist = Vector3.Distance(start, (body.Player.Team.Value == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue));
                 pos.y = 0f;
-                target.y = 0f;
+                Debug.Log("Current Position: " + pos);
+                if(body.Player.Team.Value == PlayerTeam.Red)
+                {
+                    ProjectedPointRed.y = 0f;
+                }
+                else
+                {
+                    ProjectedPointBlue.y = 0f;
+                }
+                
 
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed / duration); // ⬅️ this must come *before* using `t`
 
-                Vector3 moveDir = (pos - lastPosition).normalized;
-                Vector3 toTarget = (target - pos).normalized;
-                float alignment = Vector3.Dot(moveDir, toTarget);
+                Vector3 toTarget = ((body.Player.Team.Value == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue) - pos).normalized;
+                float alignment = Vector3.Dot(historyMoveDir, toTarget);
                 //debug.log($"[MoveFakePlayer] isBehindNet = {(body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed: IsBehindNetBlue)}, signedOffset = {(body.Player.Team.Value == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue)}, moveDir = {moveDir}");
                 if ((body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed : IsBehindNetBlue))
                 {
@@ -164,33 +188,24 @@ namespace PuckAIPractice.Patches
                     float signedOffset = body.Player.Team.Value == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue;
 
                     // Only run if we're actually moving
-                    if (moveDir.sqrMagnitude > 0.001f)
+                    if (historyMoveDir.sqrMagnitude > 0.001f)
                     {
-                        float directionalAlignment = Vector3.Dot(moveDir, goalRight * Mathf.Sign(signedOffset));
-                        //debug.log($"[MoveFakePlayer] Directional alignment behind net = {directionalAlignment:F3}");
+                        float directionalAlignment = Vector3.Dot(historyMoveDir, goalRight * Mathf.Sign(signedOffset));
+                        Debug.Log($"[MoveFakePlayer] Directional alignment behind net = {directionalAlignment:F3}");
 
                         // Now break ONLY if they’re moving the wrong way
                         if (directionalAlignment < -0.5f)
                         {
-                            //debug.log("[MoveFakePlayer] Behind net — moving wrong direction!");
+                            Debug.Log("[MoveFakePlayer] Behind net — moving wrong direction!");
                             break;
                         }
                     }
                 }
-                if (t > 0.05f && alignment < 0.5f && !(body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed : IsBehindNetBlue))
+                if (t > 0.05f && alignment < -0.5f)
                 {
-                    //debug.log($"[MoveFakePlayer] 🚨 Moving away from target!");
-                    //debug.log($"Target Position: {target}");
-                    //debug.log($"Current Position: {pos}");
-                    //debug.log($"Last Position: {lastPosition}");
-                    //debug.log($"MoveDir: {moveDir}, ToTarget: {toTarget}");
-                    //debug.log($"Dot Alignment: {alignment:F3}, t: {t:F2}");
-                    //debug.log($"[MoveFakePlayer] Moving away from target! Dot: {alignment:F3}, t: {t:F2}");
+                    Debug.Log($"🚨 Moving away from target! Dot: {alignment:F3}, t: {t:F2}");
                     break;
                 }
-
-                lastPosition = pos;
-                
                 body.transform.position = Vector3.Lerp(start, target, EaseOutQuad(t));
                 updateAudioMethod?.Invoke(body, null);
 

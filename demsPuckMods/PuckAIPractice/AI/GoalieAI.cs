@@ -23,6 +23,7 @@ namespace PuckAIPractice.AI
         private bool isPreparingDash = false;
         private Vector3 pendingDashDir;
         private float dashReadyThreshold = 5f; // degrees
+        bool hasDashed = false;
         void Start()
         {
             Debug.Log("Goalie AI Started");
@@ -114,11 +115,11 @@ namespace PuckAIPractice.AI
             {
                 if (controlledPlayer.Team.Value == PlayerTeam.Red)
                 {
-                    SimulateDashHelper.IsBehindNetRed = true;
+                    SimulateDashHelper.IsBehindNetRed = false;
                 }
                 else
                 {
-                    SimulateDashHelper.IsBehindNetBlue = true;
+                    SimulateDashHelper.IsBehindNetBlue = false;
                 }
             }
             float maxAngleThisFrame = GoalieSettings.Instance.MaxRotationAngle;
@@ -146,6 +147,16 @@ namespace PuckAIPractice.AI
             Vector3 projectedPoint = GetProjectedInterceptClamped(goaliePos, puckPos, goalCenter, forwardDot, out float signedLateralOffset, out float lateralDistance, out Vector3 puckToGoalDir);
             if (controlledPlayer.Team.Value == PlayerTeam.Red)
             {
+                SimulateDashHelper.ProjectedPointRed = projectedPoint;
+            }
+            else
+            {
+                SimulateDashHelper.ProjectedPointBlue = projectedPoint;
+            }
+            
+            Debug.Log("Projected Point: " + projectedPoint);
+            if (controlledPlayer.Team.Value == PlayerTeam.Red)
+            {
                 SimulateDashHelper.SignedLateralOffsetRed = signedLateralOffset;
             }
             else
@@ -153,8 +164,8 @@ namespace PuckAIPractice.AI
                 SimulateDashHelper.SignedLateralOffsetBlue = signedLateralOffset;
             }
             lastComputedIntercept = projectedPoint;
-            Debug.Log($"[Update] Calling HandleDashLogic (isPreparingDash: {isPreparingDash})");
-            Debug.Log($"[NeutralRotation] {neutralRotation.eulerAngles}");
+            //Debug.Log($"[Update] Calling HandleDashLogic (isPreparingDash: {isPreparingDash})");
+            //Debug.Log($"[NeutralRotation] {neutralRotation.eulerAngles}");
             HandleDashLogic(toPuck, neutralRotation, lateralDistance, signedLateralOffset, projectedPoint);
             UpdateInterceptVisual(projectedPoint);
             UpdatePuckLine(goalCenter, puckPos);
@@ -312,33 +323,39 @@ namespace PuckAIPractice.AI
                 if (interceptTargetSphere != null)
                     interceptTargetSphere.transform.position = anchor;
 
-                Debug.Log($"[Intercept] GoalRight: {goalRight}, Anchor: {anchor}, GoaliePos: {goaliePos}, SignedOffset: {signedLateralOffset}");
+                //Debug.Log($"[Intercept] GoalRight: {goalRight}, Anchor: {anchor}, GoaliePos: {goaliePos}, SignedOffset: {signedLateralOffset}");
 
                 return anchor;
             }
 
-            // Otherwise, calculate dynamic intercept normally
-            Vector3 puckToGoalie = goaliePos - puckPos;
-            float projectedLength = Vector3.Dot(puckToGoalie, puckToGoalDir);
-            projectedLength = Mathf.Clamp(projectedLength, 0f, 60f);
+            puckToGoal = goalCenter - puckPos;
 
-            Vector3 projectedPoint = puckPos + puckToGoalDir * projectedLength;
-            projectedPoint.y = goaliePos.y;
+            // Avoid divide-by-zero
+            if (Mathf.Abs(puckToGoal.z) < 0.001f)
+                puckToGoal.z = 0.001f;
 
-            Vector3 correctionVector = projectedPoint - goaliePos;
-            signedLateralOffset = Vector3.Dot(correctionVector, puckToGoalRight);
+            // Time to reach goalie’s Z position on that line
+            float t = (goaliePos.z - puckPos.z) / puckToGoal.z;
+
+            // Projected point on puck-goal line at goalie’s Z
+            Vector3 finalPoint = puckPos + puckToGoal * t;
+            finalPoint.y = goaliePos.y;  // Stay level
+
+            // Lateral offset = how far sideways goalie is from that line
+            Vector3 correctionVector = finalPoint - goaliePos;
+            signedLateralOffset = Vector3.Dot(correctionVector, puckToGoalRight);  // or goalRight
+
+            // Optional: Clamp how far laterally we care
+            //float maxLateral = 3.5f;
             signedLateralOffset = Mathf.Clamp(signedLateralOffset, -maxLateral, maxLateral);
 
-            Vector3 finalOffset = puckToGoalRight * signedLateralOffset;
-            Vector3 finalPoint = goaliePos + finalOffset;
+            // Optional: for animation/movement
+            lateralDistance = Mathf.Abs(signedLateralOffset);
 
-            lateralDistance = finalOffset.magnitude;
-
+            // Optional debug
             if (interceptTargetSphere != null)
                 interceptTargetSphere.transform.position = finalPoint;
-            float maxDashRange = 2f;
-            //if (lateralDistance > maxDashRange)
-            //    finalPoint = goaliePos + puckToGoalRight * Mathf.Sign(signedLateralOffset) * 10f;
+
             return finalPoint;
         }
         private Vector3 GetProjectedInterceptClamped(Vector3 goaliePos, Vector3 puckPos, Vector3 goalCenter, out float signedLateralOffset, out float lateralDistance, out Vector3 puckToGoalDir)
@@ -393,9 +410,9 @@ namespace PuckAIPractice.AI
             }
             else
             {
-                Debug.Log("Not ready for dashin yet bud!");
-                Debug.Log("Threshold:" + (lateralDistance > GoalieSettings.Instance.DashThreshold));
-                Debug.Log("Cooldown Active:" + cooldownActive);
+                //Debug.Log("Not ready for dashin yet bud!");
+                //Debug.Log("Threshold:" + (lateralDistance > GoalieSettings.Instance.DashThreshold));
+                //Debug.Log("Cooldown Active:" + cooldownActive);
             }
 
             // If we’re prepping to dash, wait until we’re aligned
@@ -413,13 +430,15 @@ namespace PuckAIPractice.AI
                     // Now dash in correct direction
                     if ((pendingDashDir.x < 0 && controlledPlayer.Team.Value == PlayerTeam.Red) || (pendingDashDir.x >= 0 && controlledPlayer.Team.Value == PlayerTeam.Blue))
                     {
-                        Debug.Log($"{controlledPlayer.Username.Value} Dashed Left");
+                        //Debug.Log($"{controlledPlayer.Username.Value} Dashed Left");
                         controlledPlayer.PlayerInput.Client_DashLeftInputRpc();
+                        hasDashed = true;
                     }
                     else
                     {
-                        Debug.Log($"{controlledPlayer.Username.Value} Dashed Right");
+                        //Debug.Log($"{controlledPlayer.Username.Value} Dashed Right");
                         controlledPlayer.PlayerInput.Client_DashRightInputRpc();
+                        hasDashed = true;
                     }
                     lastDashTime = Time.time;
                     isPreparingDash = false;
@@ -430,8 +449,9 @@ namespace PuckAIPractice.AI
             }
 
             // If we’ve already dashed and we’re aligned, cancel dash
-            if (Mathf.Abs(signedLateralOffset) <= GoalieSettings.Instance.CancelThreshold)
+            if (Mathf.Abs(signedLateralOffset) <= GoalieSettings.Instance.CancelThreshold && hasDashed)
             {
+                hasDashed = false; ;
                 body.CancelDash();
                 targetCancelPosition = projectedPoint;
                 Debug.Log($"[GoalieAI] Perfect alignment, canceling dash. Offset = {signedLateralOffset:F2}");
@@ -464,7 +484,7 @@ namespace PuckAIPractice.AI
             }
             else
             {
-                Debug.LogWarning("[Visualizer] puckLine object is null during Update");
+                //Debug.LogWarning("[Visualizer] puckLine object is null during Update");
             }
         }
         private void UpdateInterceptVisual(Vector3 projectedPoint)
