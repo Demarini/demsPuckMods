@@ -122,7 +122,8 @@ namespace PuckAIPractice.AI
                     SimulateDashHelper.IsBehindNetBlue = false;
                 }
             }
-            float maxAngleThisFrame = GoalieSettings.Instance.MaxRotationAngle;
+            GoalieSettings instance = controlledPlayer.Team.Value == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
+            float maxAngleThisFrame = instance.MaxRotationAngle;
 
             // Skip flattening if puck is behind net
             Vector3 goalRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right;
@@ -133,7 +134,7 @@ namespace PuckAIPractice.AI
                 float flattenStart = 6f;
                 float flattenEnd = 2.5f;
                 float t = Mathf.InverseLerp(flattenEnd, flattenStart, puckToGoalDist);
-                maxAngleThisFrame = Mathf.Lerp(0f, GoalieSettings.Instance.MaxRotationAngle, t);
+                maxAngleThisFrame = Mathf.Lerp(0f, instance.MaxRotationAngle, t);
             }
             if (!isPreparingDash)
             {
@@ -215,6 +216,7 @@ namespace PuckAIPractice.AI
     Vector3 goalCenter,
     Vector3 goalRight)
         {
+            GoalieSettings instance = controlledPlayer.Team.Value == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
             if (isBehindNet)
             {
                 // Puck is behind the net — figure out which post to pin to (based on net center)
@@ -229,12 +231,11 @@ namespace PuckAIPractice.AI
                 float clampedAngle2 = Mathf.Clamp(angleToBoard, -maxAngle, maxAngle);
 
                 Quaternion targetRotation2 = Quaternion.AngleAxis(clampedAngle2, Vector3.up) * Quaternion.LookRotation(neutralForward);
-
                 // Smooth rotate
                 body.transform.rotation = Quaternion.Slerp(
                     body.transform.rotation,
                     targetRotation2,
-                    Time.deltaTime * GoalieSettings.Instance.RotationSpeed
+                    Time.deltaTime * instance.RotationSpeed
                 );
                 return;
             }
@@ -250,7 +251,7 @@ namespace PuckAIPractice.AI
             body.transform.rotation = Quaternion.Slerp(
                 body.transform.rotation,
                 targetRotation,
-                Time.deltaTime * GoalieSettings.Instance.RotationSpeed
+                Time.deltaTime * instance.RotationSpeed
             );
         }
         private void UpdateArrow(GameObject obj, Vector3 start, Vector3 end, Color dotColor)
@@ -291,7 +292,7 @@ namespace PuckAIPractice.AI
     out Vector3 puckToGoalDir)
         {
             const float maxLateral = 3.5f;
-
+            GoalieSettings instance = controlledPlayer.Team.Value == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
             // Use same frame as puckToGoalRight from front-of-net mode
             Vector3 puckToGoal = goalCenter - puckPos;
             puckToGoalDir = puckToGoal.normalized;
@@ -305,7 +306,7 @@ namespace PuckAIPractice.AI
                 float side = Vector3.Dot(sideVec, goalRight); // Which side of the net
 
                 float postOffset = 1.5f;        // How far from center to post
-                float goalieDepth = -GoalieSettings.Instance.DistanceFromNet; ;       // How far out in front of net
+                float goalieDepth = -instance.DistanceFromNet; ;       // How far out in front of net
 
                 // Move left/right from center using world right
                 Vector3 anchor = goalCenter + goalRight * Mathf.Sign(side) * postOffset;
@@ -391,13 +392,14 @@ namespace PuckAIPractice.AI
 
         private void HandleDashLogic(Vector3 toPuck, Quaternion neutralRotation, float lateralDistance, float signedLateralOffset, Vector3 projectedPoint)
         {
-            bool cooldownActive = Time.time < lastDashTime + GoalieSettings.Instance.DashCooldown;
-            bool gracePeriodActive = Time.time < lastDashStartTime + GoalieSettings.Instance.DashCancelGrace;
+            GoalieSettings instance = controlledPlayer.Team.Value == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
+            bool cooldownActive = Time.time < lastDashTime + instance.DashCooldown;
+            bool gracePeriodActive = Time.time < lastDashStartTime + instance.DashCancelGrace;
 
             // Start sliding
             controlledPlayer.PlayerInput.Client_SlideInputRpc(true);
 
-            if (!cooldownActive && lateralDistance > GoalieSettings.Instance.DashThreshold && !isPreparingDash)
+            if (!cooldownActive && lateralDistance > instance.DashThreshold && !isPreparingDash)
             {
                 Vector3 dashDir = signedLateralOffset < 0 ? Vector3.left : Vector3.right;
                 Vector3 teamRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right;
@@ -421,7 +423,7 @@ namespace PuckAIPractice.AI
                 body.transform.rotation = Quaternion.RotateTowards(
                     body.transform.rotation,
                     neutralRotation,
-                    Time.deltaTime * GoalieSettings.Instance.RotationSpeed * 60f
+                    Time.deltaTime * instance.RotationSpeed * 60f
                 );
 
                 float angle = Quaternion.Angle(body.transform.rotation, neutralRotation);
@@ -449,7 +451,7 @@ namespace PuckAIPractice.AI
             }
 
             // If we’ve already dashed and we’re aligned, cancel dash
-            if (Mathf.Abs(signedLateralOffset) <= GoalieSettings.Instance.CancelThreshold && hasDashed)
+            if (Mathf.Abs(signedLateralOffset) <= instance.CancelThreshold && hasDashed)
             {
                 hasDashed = false; ;
                 body.CancelDash();
