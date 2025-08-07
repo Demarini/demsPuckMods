@@ -23,7 +23,6 @@ namespace PuckAIPractice.Patches
             string command = (string)message["command"];
             Debug.Log(command);
             string[] parsedCommand = (string[])message["args"];
-            Debug.Log(parsedCommand[0]);
             if (command == "/goalies" && parsedCommand.Count() == 1)
             {
                 // Execute your goalie spawning logic here
@@ -66,6 +65,7 @@ namespace PuckAIPractice.Patches
             }
             else if (command == "/endgoaliesession")
             {
+                Debug.Log("End Goalie Session");
                 Goalies.EndGoalieSession(GoalieSession.Both);
             }
             else

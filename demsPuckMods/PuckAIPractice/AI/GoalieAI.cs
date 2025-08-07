@@ -39,7 +39,7 @@ namespace PuckAIPractice.AI
             var body = controlledPlayer.PlayerBody;
             if (body != null)
             {
-                Debug.Log("Found Body Updating Slide");
+                //Debug.Log("Found Body Updating Slide");
                 body.IsSliding.Value = true;
             }
 
@@ -83,7 +83,7 @@ namespace PuckAIPractice.AI
 
             ResolvePuckReference();
             InitializeBody();
-            InitializeInterceptVisuals();
+            //InitializeInterceptVisuals();
 
             Quaternion neutralRotation = GetNeutralRotation();
             Vector3 neutralForward = GetNeutralForward();
@@ -140,11 +140,9 @@ namespace PuckAIPractice.AI
             {
                 RotateTowardPuck(toPuck, neutralForward, isBehindNet, maxAngleThisFrame, goalCenter, goalRight);
             }
-            CreateArrow(ref netForwardArrow, Color.green);
-            //CreateArrow(ref netToPuckArrow, Color.blue);
+            //CreateArrow(ref netForwardArrow, Color.green);
             Color dotColor = (forwardDot >= 0.5f) ? Color.green : Color.red;
-            UpdateArrow(netForwardArrow, goalCenter, goalCenter + neutralForward * 4f, dotColor); // Green = Goalie forward
-            //UpdateArrow(netToPuckArrow, goaliePos, puckPos, dotColor);                        // Blue = To puck
+            //UpdateArrow(netForwardArrow, goalCenter, goalCenter + neutralForward * 4f, dotColor); // Green = Goalie forward
             Vector3 projectedPoint = GetProjectedInterceptClamped(goaliePos, puckPos, goalCenter, forwardDot, out float signedLateralOffset, out float lateralDistance, out Vector3 puckToGoalDir);
             if (controlledPlayer.Team.Value == PlayerTeam.Red)
             {
@@ -155,7 +153,7 @@ namespace PuckAIPractice.AI
                 SimulateDashHelper.ProjectedPointBlue = projectedPoint;
             }
             
-            Debug.Log("Projected Point: " + projectedPoint);
+            //Debug.Log("Projected Point: " + projectedPoint);
             if (controlledPlayer.Team.Value == PlayerTeam.Red)
             {
                 SimulateDashHelper.SignedLateralOffsetRed = signedLateralOffset;
@@ -168,8 +166,8 @@ namespace PuckAIPractice.AI
             //Debug.Log($"[Update] Calling HandleDashLogic (isPreparingDash: {isPreparingDash})");
             //Debug.Log($"[NeutralRotation] {neutralRotation.eulerAngles}");
             HandleDashLogic(toPuck, neutralRotation, lateralDistance, signedLateralOffset, projectedPoint);
-            UpdateInterceptVisual(projectedPoint);
-            UpdatePuckLine(goalCenter, puckPos);
+            //UpdateInterceptVisual(projectedPoint);
+            //UpdatePuckLine(goalCenter, puckPos);
         }
         private void ResolvePuckReference()
         {
