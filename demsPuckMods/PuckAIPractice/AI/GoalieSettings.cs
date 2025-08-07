@@ -4,14 +4,24 @@
 
     public class GoalieSettings
     {
-        private static GoalieSettings _instance;
-        public static GoalieSettings Instance
+        private static GoalieSettings _instanceBlue;
+        public static GoalieSettings InstanceBlue
         {
             get
             {
-                if (_instance == null)
-                    _instance = new GoalieSettings();
-                return _instance;
+                if (_instanceBlue == null)
+                    _instanceBlue = new GoalieSettings();
+                return _instanceBlue;
+            }
+        }
+        private static GoalieSettings _instanceRed;
+        public static GoalieSettings InstanceRed
+        {
+            get
+            {
+                if (_instanceRed == null)
+                    _instanceRed = new GoalieSettings();
+                return _instanceRed;
             }
         }
 
@@ -69,7 +79,7 @@
                     ReactionTime = 0.15f;
                     MaxRotationAngle = 80f;
                     RotationSpeed = 18f;
-                    DistanceFromNet = .4f;
+                    DistanceFromNet = .5f;
                     break;
             }
         }

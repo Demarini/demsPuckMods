@@ -23,15 +23,52 @@ namespace PuckAIPractice.GameModes
 
             GoaliesAreRunning = true;
         }
-        public static void StartGoalieSessionViaCoroutine()
+        public static IEnumerator StartGoalieSessionRed()
         {
-            GoalieRunner.Instance.StartCoroutine(StartGoalieSession());
+            yield return new WaitForSeconds(.1f);
+            BotSpawning.SpawnFakePlayer(1, PlayerRole.Goalie, PlayerTeam.Red);
+
+
+            //Debug.Log($"[BotSpawning] Fake registry contains {FakePlayerRegistry.All.Count()} bots");
+
+            GoaliesAreRunning = true;
         }
-        public static void EndGoalieSession()
+        public static IEnumerator StartGoalieSessionBlue()
         {
-            BotSpawning.DespawnBots();
+            yield return new WaitForSeconds(.1f);
+            BotSpawning.SpawnFakePlayer(0, PlayerRole.Goalie, PlayerTeam.Blue);
+
+
+            //Debug.Log($"[BotSpawning] Fake registry contains {FakePlayerRegistry.All.Count()} bots");
+
+            GoaliesAreRunning = true;
+        }
+        public static void StartGoalieSessionViaCoroutine(GoalieSession session)
+        {
+            switch (session)
+            {
+                case GoalieSession.Blue:
+                    GoalieRunner.Instance.StartCoroutine(StartGoalieSessionBlue());
+                    break;
+                case GoalieSession.Red:
+                    GoalieRunner.Instance.StartCoroutine(StartGoalieSessionRed());
+                    break;
+                case GoalieSession.Both:
+                    GoalieRunner.Instance.StartCoroutine(StartGoalieSession());
+                    break;
+            }
+        }
+        public static void EndGoalieSession(GoalieSession type)
+        {
+            Debug.Log("End Goalie Session");
+            BotSpawning.DespawnBots(type);
             GoaliesAreRunning = false;
         }
-
+    }
+    public enum GoalieSession
+    {
+        Red,
+        Blue,
+        Both
     }
 }

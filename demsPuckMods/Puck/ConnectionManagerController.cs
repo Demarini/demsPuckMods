@@ -144,6 +144,7 @@ public class ConnectionManagerController : MonoBehaviour
 	// Token: 0x060002A6 RID: 678 RVA: 0x000089A4 File Offset: 0x00006BA4
 	private void Event_Client_OnPauseMenuClickDisconnect(Dictionary<string, object> message)
 	{
+
 		this.connectionManager.Client_Disconnect();
 	}
 

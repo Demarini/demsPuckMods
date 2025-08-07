@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using PuckAIPractice.AI;
+using PuckAIPractice.GameModes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,7 +28,7 @@ namespace PuckAIPractice.Utilities
                 Debug.LogError("[FAKE_SPAWN] Could not access playerPrefab from PlayerManager!");
                 return;
             }
-
+            Debug.Log("Got player instance?");
             var playerObj = UnityEngine.Object.Instantiate(prefab);
             var netObj = playerObj.GetComponent<NetworkObject>();
 
@@ -41,10 +42,11 @@ namespace PuckAIPractice.Utilities
             player.Role.Value = role;
             player.PatreonLevel.Value = 69;
             var position = GetNextUnclaimedPosition(player.Team.Value, player.Role.Value);
+            Debug.Log("Server Claim Role");
             position.Server_Claim(player);
             // Nudge goalie back toward the goal slightly to reduce open angles
             Vector3 neutralForward = (player.Team.Value == PlayerTeam.Red) ? Vector3.forward : Vector3.back;
-            Vector3 adjustedPosition = player.transform.position - neutralForward * GoalieSettings.Instance.DistanceFromNet;
+            Vector3 adjustedPosition = player.transform.position - neutralForward * (team == PlayerTeam.Red ? GoalieSettings.InstanceRed.DistanceFromNet : GoalieSettings.InstanceBlue.DistanceFromNet);
 
             adjustedPosition.y = player.transform.position.y; // maintain height
             player.transform.position = adjustedPosition;
@@ -109,21 +111,44 @@ namespace PuckAIPractice.Utilities
             Debug.LogWarning($"[FAKE_SPAWN] No available position found for team {team} and role {role}");
             return null;
         }
-        public static void DespawnBots()
+        public static void DespawnBots(GoalieSession type)
         {
+            Debug.Log("Started Despawn Bots");
             HashSet<Player> players = FakePlayerRegistry.All.ToHashSet<Player>();
+            if(players == null)
+            {
+                Debug.Log("No Bots in Registry");
+            }
             foreach (Player p in players)
             {
-                p.PlayerPosition.Server_Unclaim();
-                p.Server_DespawnCharacter();
-                p.Server_DespawnSpectatorCamera();
-                p.Team.Value = PlayerTeam.None;
-                NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(p);
-                p.NetworkObject.Despawn(true);
-                UIScoreboard.Instance.RemovePlayer(p);
-                //EventManager.TriggerEvent("Event_Server_OnPlayerDespawned", new Dictionary<string, object> { { "player", p } });
-                FakePlayerRegistry.Unregister(p);
+                if(type == GoalieSession.Blue && p.Team.Value == PlayerTeam.Blue)
+                {
+                    Despawn(p);
+                }
+                else if(type == GoalieSession.Red && p.Team.Value == PlayerTeam.Red)
+                {
+                    Despawn(p);
+                }
+                else if(type == GoalieSession.Both)
+                {
+                    Despawn(p);
+                }
+                
             }
+            Debug.Log("Finished Despawning Bots");
+        }
+        public static void Despawn(Player p)
+        {
+            p.PlayerPosition.Server_Unclaim();
+            p.Server_DespawnCharacter();
+            p.Server_DespawnSpectatorCamera();
+            p.Team.Value = PlayerTeam.None;
+            Debug.Log("Removed Bot From Game");
+            NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(p);
+            p.NetworkObject.Despawn(true);
+            UIScoreboard.Instance.RemovePlayer(p);
+            //EventManager.TriggerEvent("Event_Server_OnPlayerDespawned", new Dictionary<string, object> { { "player", p } });
+            FakePlayerRegistry.Unregister(p);
         }
     }
 }
