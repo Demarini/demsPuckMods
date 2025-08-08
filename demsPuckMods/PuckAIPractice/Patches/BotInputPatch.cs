@@ -100,7 +100,7 @@ namespace PuckAIPractice.Patches
         public static Vector3 ProjectedPointBlue;
         private static IEnumerator MoveFakePlayer(PlayerBodyV2 body, Vector3 target, float duration)
         {
-            Debug.Log("Starting Move Faker Player");
+            //Debug.Log("Starting Move Faker Player");
             const float slideTurnMultiplier = 2f;
             const float jumpTurnMultiplier = 5f;
             const float fallenDrag = 0.2f;
@@ -147,8 +147,8 @@ namespace PuckAIPractice.Patches
             updateAudioMethod?.Invoke(body, null);
             GoalieAI goalieAI = body.GetComponent<GoalieAI>();
             Vector3 lastPosition = start;
-            Debug.Log("Target Position: " + (body.Player.Team.Value == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue));
-            Debug.Log("Last Position: " + lastPosition);
+            //Debug.Log("Target Position: " + (body.Player.Team.Value == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue));
+            //Debug.Log("Last Position: " + lastPosition);
             while (elapsed < duration && state.IsDashing)
             {
                 Vector3 netPos = body.Player.Team.Value == PlayerTeam.Red ? redNetCenter : blueNetCenter;
@@ -165,7 +165,7 @@ namespace PuckAIPractice.Patches
                 }
                 float prevDist = Vector3.Distance(start, (body.Player.Team.Value == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue));
                 pos.y = 0f;
-                Debug.Log("Current Position: " + pos);
+                //Debug.Log("Current Position: " + pos);
                 if(body.Player.Team.Value == PlayerTeam.Red)
                 {
                     ProjectedPointRed.y = 0f;
@@ -191,19 +191,19 @@ namespace PuckAIPractice.Patches
                     if (historyMoveDir.sqrMagnitude > 0.001f)
                     {
                         float directionalAlignment = Vector3.Dot(historyMoveDir, goalRight * Mathf.Sign(signedOffset));
-                        Debug.Log($"[MoveFakePlayer] Directional alignment behind net = {directionalAlignment:F3}");
+                        //Debug.Log($"[MoveFakePlayer] Directional alignment behind net = {directionalAlignment:F3}");
 
                         // Now break ONLY if they’re moving the wrong way
                         if (directionalAlignment < -0.5f)
                         {
-                            Debug.Log("[MoveFakePlayer] Behind net — moving wrong direction!");
+                            //Debug.Log("[MoveFakePlayer] Behind net — moving wrong direction!");
                             break;
                         }
                     }
                 }
                 if (t > 0.05f && alignment < -0.5f)
                 {
-                    Debug.Log($"🚨 Moving away from target! Dot: {alignment:F3}, t: {t:F2}");
+                    //Debug.Log($"🚨 Moving away from target! Dot: {alignment:F3}, t: {t:F2}");
                     break;
                 }
                 body.transform.position = Vector3.Lerp(start, target, EaseOutQuad(t));
@@ -341,44 +341,44 @@ namespace PuckAIPractice.Patches
             return false; // skip original
         }
     }
-    [HarmonyPatch(typeof(UIScoreboard), "UpdatePlayer")]
-    public static class UIScoreboard_UpdatePlayer_Patch
-    {
-        public static void Postfix(UIScoreboard __instance, Player player)
-        {
-            if (__instance == null || player == null)
-                return;
+    //[HarmonyPatch(typeof(UIScoreboard), "UpdatePlayer")]
+    //public static class UIScoreboard_UpdatePlayer_Patch
+    //{
+    //    public static void Postfix(UIScoreboard __instance, Player player)
+    //    {
+    //        if (__instance == null || player == null)
+    //            return;
 
-            // Grab the visual element associated with this player
-            VisualElement visualElement;
-            if (!Traverse.Create(__instance)
-                         .Field("playerVisualElementMap")
-                         .GetValue<Dictionary<Player, VisualElement>>()
-                         .TryGetValue(player, out visualElement))
-                return;
+    //        // Grab the visual element associated with this player
+    //        VisualElement visualElement;
+    //        if (!Traverse.Create(__instance)
+    //                     .Field("playerVisualElementMap")
+    //                     .GetValue<Dictionary<Player, VisualElement>>()
+    //                     .TryGetValue(player, out visualElement))
+    //            return;
 
-            // Rebuild label text with our own admin prefix logic
-            Label usernameLabel = visualElement.Query<Label>("UsernameLabel");
-            if (usernameLabel == null)
-                return;
+    //        // Rebuild label text with our own admin prefix logic
+    //        Label usernameLabel = visualElement.Query<Label>("UsernameLabel");
+    //        if (usernameLabel == null)
+    //            return;
 
-            string prefix = GetCustomPrefix(player);
-            usernameLabel.text = string.Format("{0}<noparse>#{1} {2}</noparse>", prefix, player.Number.Value, player.Username.Value);
-        }
-        static List<string> donorList = new List<string>() { "76561197994406332" };
-        private static string GetCustomPrefix(Player player)
-        {
+    //        string prefix = GetCustomPrefix(player);
+    //        usernameLabel.text = string.Format("{0}<noparse>#{1} {2}</noparse>", prefix, player.Number.Value, player.Username.Value);
+    //    }
+    //    static List<string> donorList = new List<string>() { "76561197994406332" };
+    //    private static string GetCustomPrefix(Player player)
+    //    {
             
-            if (donorList.Contains(player.SteamId.Value.ToString()))
-            {
-                return $"<b><color=#00AAFF>DA_ROBO_MAN</color></b>";
-            }
-            else
-            {
-                return $"<b><color=#00AAFF>SAVE_BOT_3000</color></b>";
-            }
-        }
-    }
+    //        if (donorList.Contains(player.SteamId.Value.ToString()))
+    //        {
+    //            return $"<b><color=#00aaff>DEM :o</color></b>";
+    //        }
+    //        else
+    //        {
+    //            return $"<b><color=#00aaff>[demBot3000]</color></b>";
+    //        }
+    //    }
+    //}
     [HarmonyPatch(typeof(PlayerBodyV2), "FixedUpdate")]
     public static class PlayerBodyV2_FixedUpdate_Patch
     {

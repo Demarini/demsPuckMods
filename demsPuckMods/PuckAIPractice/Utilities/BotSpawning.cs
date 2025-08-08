@@ -36,11 +36,10 @@ namespace PuckAIPractice.Utilities
             netObj.SpawnWithOwnership(fakeClientId, true);
 
             var player = playerObj.GetComponent<Player>();
-            player.Username.Value = $"Bot_{index + 1}";
+            player.Username.Value = $"demBot_{index + 1}";
             player.Team.Value = team;
             player.Number.Value = index + 1;
             player.Role.Value = role;
-            player.PatreonLevel.Value = 69;
             var position = GetNextUnclaimedPosition(player.Team.Value, player.Role.Value);
             Debug.Log("Server Claim Role");
             position.Server_Claim(player);

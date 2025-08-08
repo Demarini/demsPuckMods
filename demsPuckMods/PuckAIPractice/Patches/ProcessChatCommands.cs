@@ -93,7 +93,7 @@ namespace PuckAIPractice.Patches
                 else
                 {
                     GoalieSettings.InstanceRed.ApplyDifficulty(GoalieDifficulty.Easy);
-                    GoalieSettings.InstanceRed.ApplyDifficulty(GoalieDifficulty.Easy);
+                    GoalieSettings.InstanceBlue.ApplyDifficulty(GoalieDifficulty.Easy);
                 }
             }
             else if (difficulty.ToLower() == "normal")
@@ -109,7 +109,7 @@ namespace PuckAIPractice.Patches
                 else
                 {
                     GoalieSettings.InstanceRed.ApplyDifficulty(GoalieDifficulty.Normal);
-                    GoalieSettings.InstanceRed.ApplyDifficulty(GoalieDifficulty.Normal);
+                    GoalieSettings.InstanceBlue.ApplyDifficulty(GoalieDifficulty.Normal);
                 }
             }
             else if (difficulty.ToLower() == "hard")
@@ -125,7 +125,7 @@ namespace PuckAIPractice.Patches
                 else
                 {
                     GoalieSettings.InstanceRed.ApplyDifficulty(GoalieDifficulty.Hard);
-                    GoalieSettings.InstanceRed.ApplyDifficulty(GoalieDifficulty.Hard);
+                    GoalieSettings.InstanceBlue.ApplyDifficulty(GoalieDifficulty.Hard);
                 }
             }
         }

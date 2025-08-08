@@ -31,7 +31,13 @@ namespace ModifyMinimapIcons
 
             try
             {
-                _instance = JsonConvert.DeserializeObject<ConfigData>(File.ReadAllText(ConfigPath));
+                _instance = new ConfigData();
+                JsonConvert.PopulateObject(File.ReadAllText(ConfigPath), _instance);
+                if (_instance.puckScale == .99f)
+                {
+                    _instance.puckScale = 1f;
+                    Save();
+                }
                 Debug.Log($"[Config] Loaded config successfully from: {ConfigPath}");
             }
             catch
@@ -88,6 +94,8 @@ namespace ModifyMinimapIcons
         public float passBlockRadius { get; set; } = 2.5f;
         public float passBlockDistanceLimit { get; set; } = 25f;
         public bool scalePassDetectionWithMinimap { get; set; } = true;
+        public float puckScale { get; set; } = 0.99f;
+        public string puckColor { get; set; } = "#000000";
 
         // --- HELPER FUNCTIONS ---
         /// <summary>

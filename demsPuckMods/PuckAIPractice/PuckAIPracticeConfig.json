@@ -1,0 +1,6 @@
+{
+  "StartWithBlueGoalie": true,
+  "StartWithRedGoalie": true,
+  "RedGoalieDefaultDifficulty": 1, //0 = easy, 1 = normal, 2 = hard
+  "BlueGoalieDefaultDifficulty": 1 //0 = easy, 1 = normal, 2 = hard
+}

@@ -11,10 +11,11 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.UIElements;
 using static UnityEngine.EventSystems.EventTrigger;
-
+using PuckAIPractice.Config;
+using PuckAIPractice.Singletons;
 namespace PuckAIPractice
 {
-    public class TestAI : IPuckMod
+    public class InitializePuckAI : IPuckMod
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.PuckAIPractice");
 
@@ -24,6 +25,8 @@ namespace PuckAIPractice
             try
             {
                 GoalieRunner.Initialize();
+                ModConfig.Initialize();
+                ConfigData.Load();
                 harmony.PatchAll();
                 //HarmonyLogger.PatchSpecificMethods(harmony, typeof(Player), new List<string>() { "OnNetworkSpawn", "OnNetworkPostSpawn", "Client_SetPlayerStateRpc", "Server_RespawnCharacter", "Server_DespawnCharacter" });
                 //HarmonyLogger.PatchAllMethods(harmony, typeof(UIManager));

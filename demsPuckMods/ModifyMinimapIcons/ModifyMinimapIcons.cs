@@ -169,6 +169,10 @@ namespace ModifyMinimapIcons
                 .Field("playerBodyVisualElementMap")
                 .GetValue<Dictionary<PlayerBodyV2, VisualElement>>();
 
+            var puckMap = Traverse.Create(__instance)
+                .Field("puckVisualElementMap")
+                .GetValue<Dictionary<Puck, VisualElement>>();
+
             if (playerMap == null || playerMap.Count == 0)
             {
                 CachedLocalPlayer = null;
@@ -311,28 +315,40 @@ namespace ModifyMinimapIcons
                 }
 
                 // Highlight teammates
-                if (cfg.highlightOpenTeammates && localPlayer != null &&
-                    targetTeam == __instance.Team && !isLocal && !isSpectator)
-                {
-                    var opponents = new List<PlayerBodyV2>();
-                    foreach (var opp in playerMap.Keys)
-                    {
-                        if (opp?.Player != null && opp.Player.Team.Value != __instance.Team)
-                            opponents.Add(opp);
-                    }
+                //if (cfg.highlightOpenTeammates && localPlayer != null &&
+                //    targetTeam == __instance.Team && !isLocal && !isSpectator)
+                //{
+                //    var opponents = new List<PlayerBodyV2>();
+                //    foreach (var opp in playerMap.Keys)
+                //    {
+                //        if (opp?.Player != null && opp.Player.Team.Value != __instance.Team)
+                //            opponents.Add(opp);
+                //    }
 
-                    float radius = cfg.passBlockRadius;
-                    if (cfg.scalePassDetectionWithMinimap)
-                        radius *= MinimapValues.CurrentScale;
+                //    float radius = cfg.passBlockRadius;
+                //    if (cfg.scalePassDetectionWithMinimap)
+                //        radius *= MinimapValues.CurrentScale;
 
-                    bool isOpen = IsPlayerOpen(localPlayer, playerBody, opponents, radius, cfg.passBlockDistanceLimit);
-                    if (isOpen)
-                        body.style.unityBackgroundImageTintColor = new StyleColor(ConfigData.HexToColor(cfg.openHighlightColor));
-                }
+                //    bool isOpen = IsPlayerOpen(localPlayer, playerBody, opponents, radius, cfg.passBlockDistanceLimit);
+                //    if (isOpen)
+                //        body.style.unityBackgroundImageTintColor = new StyleColor(ConfigData.HexToColor(cfg.openHighlightColor));
+                //}
 
                 // Apply scaling relative to minimap zoom
                 float minimapScale = MinimapValues.CurrentScale;
                 body.transform.scale = new Vector3(finalScale * minimapScale, finalScale * minimapScale, 1f);
+            }
+            foreach (KeyValuePair<Puck, VisualElement> keyValuePair2 in puckMap)
+            {
+                Puck key2 = keyValuePair2.Key;
+                VisualElement value2 = keyValuePair2.Value;
+                if (key2)
+                {
+                    //test
+                    float minimapScale = MinimapValues.CurrentScale;
+                    value2.transform.scale = new Vector3(cfg.puckScale * .9f * minimapScale, cfg.puckScale * minimapScale, 1f);
+                    value2.style.backgroundColor = new StyleColor(ConfigData.HexToColor(cfg.puckColor));
+                }
             }
         }
     }

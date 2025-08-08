@@ -11,7 +11,7 @@
   "teamScalingFactor": 1.0,
   "opponentScalingFactor": 1.0,
   "scaleWithMinimap": true,
-  "pulsePlayerIcon": false,
+  "pulsePlayerIcon": true,
   "playerPulseSpeed": 4.0,
   "playerPulseStrength": 0.2,
   "pulseTeamIcon": false,
@@ -20,11 +20,11 @@
   "pulseOpponentIcon": false,
   "opponentPulseSpeed": 4.0,
   "opponentPulseStrength": 0.2,
-
-  // --- NEW CONFIGURABLE FIELDS FOR "OPEN" DETECTION ---
-  "highlightOpenTeammates": true, // Enable/disable highlighting at all
-  "openHighlightColor": "#FFFF00", // Yellow by default
-  "passBlockRadius": 2.5, // Radius around pass line to check for defenders (world units)
-  "passBlockDistanceLimit": 25.0, // Max distance to even consider a pass (prevents far-away teammates from triggering)
-  "scalePassDetectionWithMinimap": true // Always scales blockRadius with minimap zoom
+  "highlightOpenTeammates": true,
+  "openHighlightColor": "#FFFF00",
+  "passBlockRadius": 2.5,
+  "passBlockDistanceLimit": 25.0,
+  "scalePassDetectionWithMinimap": true,
+  "puckScale": 1.0,
+  "puckColor": "#000000"
 }

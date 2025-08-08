@@ -454,7 +454,7 @@ namespace PuckAIPractice.AI
                 hasDashed = false; ;
                 body.CancelDash();
                 targetCancelPosition = projectedPoint;
-                Debug.Log($"[GoalieAI] Perfect alignment, canceling dash. Offset = {signedLateralOffset:F2}");
+                //Debug.Log($"[GoalieAI] Perfect alignment, canceling dash. Offset = {signedLateralOffset:F2}");
             }
         }
 

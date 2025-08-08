@@ -38,7 +38,7 @@ namespace PuckAIPractice.Patches
     {
         public static void Postfix(Dictionary<string, object> message)
         {
-            DebugGUI.Log("Disconnected Goalie Session");
+            //DebugGUI.Log("Disconnected Goalie Session");
             if (Goalies.GoaliesAreRunning)
             {
                 Goalies.EndGoalieSession(GoalieSession.Both);
