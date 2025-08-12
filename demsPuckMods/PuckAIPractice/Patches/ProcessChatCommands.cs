@@ -9,29 +9,46 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Mathematics.Geometry;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace PuckAIPractice.Patches
 {
-    
+    public static class VoteChatCommandHelper
+    {
+        public static bool IsGoalieVoteStarted { get; set; } = false;
+        public static int TotalVotes { get; set; } = 0;
+        public static int VotesNeeded { get; set; } = 0;
+    }
     [HarmonyPatch(typeof(VoteManagerController), "Event_Server_OnChatCommand")]
     public static class GoaliesCommandPatch
     {
         [HarmonyPrefix]
-        public static bool Prefix(Dictionary<string, object> message)
+        public static bool Prefix(VoteManagerController __instance, Dictionary<string, object> message)
         {
+            if (!PracticeModeDetector.IsPracticeMode)
+            {
+                return true;
+            }
             string command = (string)message["command"];
-            Debug.Log(command);
+            ulong clientId = (ulong)message["clientId"];
             string[] parsedCommand = (string[])message["args"];
+            Player playerByClientId = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayerByClientId(clientId);
+            VoteChatCommandHelper.VotesNeeded = Mathf.RoundToInt((float)NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayers(false).Count / 2f + 0.5f);
+
             if (command == "/goalies" && parsedCommand.Count() == 1)
             {
-                // Execute your goalie spawning logic here
-                Debug.Log("[GOALIES] Custom command triggered!");
-                Debug.Log(parsedCommand.Count());
-                // You can extract the caller ID if needed
-                ulong clientId = (ulong)message["clientId"];
+                VoteManager voteManager = (VoteManager)Traverse.Create(__instance).Field("voteManager").GetValue();
+                var vm = Traverse.Create(voteManager);
+                Player player = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayerByUsername("dem", false);
+                List<string> goalieData = new List<string>() { "both", parsedCommand[0] };
+                //if (!vm.Method("Server_IsVoteStarted", new object[] { CustomVoteTypes.GoalieDifficulty }).GetValue<bool>())
+                //{
+                //    vm.Method("Server_CreateVote", new object[] { CustomVoteTypes.GoalieDifficulty, VoteChatCommandHelper.VotesNeeded, clientId, goalieData /* your data */ })
+                //      .GetValue();
+                //}
+                //vm.Method("Server_SubmitVote", new object[] { CustomVoteTypes.GoalieDifficulty, clientId }).GetValue();
                 Player sender = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayerByClientId(clientId);
-                Debug.Log($"[GOALIES] Command issued by {sender.Username.Value}");
                 if (sender != null)
                 {
                     return SpawnGoaliesBasedOffCommand(parsedCommand[0], GoalieSession.Both);
@@ -39,12 +56,11 @@ namespace PuckAIPractice.Patches
             }
             else if (command == "/goalie" && parsedCommand.Count() == 2) 
             {
-                Debug.Log("[GOALIES] Custom command triggered!");
-                Debug.Log(parsedCommand.Count());
+                //Debug.Log("[GOALIES] Custom command triggered!");
+                //Debug.Log(parsedCommand.Count());
                 // You can extract the caller ID if needed
-                ulong clientId = (ulong)message["clientId"];
                 Player sender = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayerByClientId(clientId);
-                Debug.Log($"[GOALIES] Command issued by {sender.Username.Value}");
+                //Debug.Log($"[GOALIES] Command issued by {sender.Username.Value}");
                 if (sender != null)
                 {
                     GoalieSession type = GoalieSession.Red;
@@ -65,7 +81,7 @@ namespace PuckAIPractice.Patches
             }
             else if (command == "/endgoaliesession")
             {
-                Debug.Log("End Goalie Session");
+                //Debug.Log("End Goalie Session");
                 Goalies.EndGoalieSession(GoalieSession.Both);
             }
             else
@@ -73,9 +89,6 @@ namespace PuckAIPractice.Patches
                 return true;
             }
                  // Not our command, continue with original method
-
-            
-
             return false; // Skip original voting logic
         }
         public static void ApplyGoalieSettings(string difficulty, GoalieSession type)
@@ -137,15 +150,18 @@ namespace PuckAIPractice.Patches
                 ApplyGoalieSettings(difficulty, type);
                 if (difficulty.ToLower() == "easy")
                 {
-                    Goalies.StartGoalieSessionViaCoroutine(type);
+                    Goalies.GoaliesAreRunning = true;
+                    //Goalies.StartGoalieSessionViaCoroutine(type);
                 }
                 else if (difficulty.ToLower() == "normal")
                 {
-                    Goalies.StartGoalieSessionViaCoroutine(type);
+                    Goalies.GoaliesAreRunning = true;
+                    //Goalies.StartGoalieSessionViaCoroutine(type);
                 }
                 else if (difficulty.ToLower() == "hard")
                 {
-                    Goalies.StartGoalieSessionViaCoroutine(type);
+                    Goalies.GoaliesAreRunning = true;
+                    //Goalies.StartGoalieSessionViaCoroutine(type);
                 }
                 else
                 {
@@ -156,21 +172,28 @@ namespace PuckAIPractice.Patches
             {
                 if (difficulty.ToLower() != "end")
                 {
+                    Goalies.GoaliesAreRunning = false;
                     ApplyGoalieSettings(difficulty, type);
                     if (difficulty.ToLower() == "easy")
                     {
+                        //BotSpawning.DespawnBots(type);
                         Goalies.EndGoalieSession(type);
-                        Goalies.StartGoalieSessionViaCoroutine(type);
+                        //Goalies.StartGoalieSessionViaCoroutine(type);
+                        Goalies.GoaliesAreRunning = true;
                     }
                     else if (difficulty.ToLower() == "normal")
                     {
+                        //BotSpawning.DespawnBots(type);
                         Goalies.EndGoalieSession(type);
-                        Goalies.StartGoalieSessionViaCoroutine(type);
+                        //Goalies.StartGoalieSessionViaCoroutine(type)
+                        //Goalies.GoaliesAreRunning = true;;
                     }
                     else if (difficulty.ToLower() == "hard")
                     {
+                        //BotSpawning.DespawnBots(type);
                         Goalies.EndGoalieSession(type);
-                        Goalies.StartGoalieSessionViaCoroutine(type);
+                        //Goalies.StartGoalieSessionViaCoroutine(type);
+                        Goalies.GoaliesAreRunning = true;
                     }
                     else
                     {
@@ -179,7 +202,7 @@ namespace PuckAIPractice.Patches
                 }
                 else
                 {
-                    Goalies.EndGoalieSession(type);
+                    //Goalies.EndGoalieSession(type);
                 }
             }
             return false;

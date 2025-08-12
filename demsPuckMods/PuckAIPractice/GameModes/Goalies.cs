@@ -41,7 +41,7 @@ namespace PuckAIPractice.GameModes
 
             //Debug.Log($"[BotSpawning] Fake registry contains {FakePlayerRegistry.All.Count()} bots");
 
-            GoaliesAreRunning = true;
+           GoaliesAreRunning = true;
         }
         public static void StartGoalieSessionViaCoroutine(GoalieSession session)
         {
@@ -60,7 +60,7 @@ namespace PuckAIPractice.GameModes
         }
         public static void EndGoalieSession(GoalieSession type)
         {
-            Debug.Log("End Goalie Session");
+            //Debug.Log("End Goalie Session");
             BotSpawning.DespawnBots(type);
             GoaliesAreRunning = false;
         }

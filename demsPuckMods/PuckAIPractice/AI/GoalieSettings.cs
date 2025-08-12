@@ -1,4 +1,6 @@
-﻿namespace PuckAIPractice.AI
+﻿using UnityEngine;
+
+namespace PuckAIPractice.AI
 {
     public enum GoalieDifficulty { Easy, Normal, Hard }
 
@@ -46,7 +48,7 @@
         public void ApplyDifficulty(GoalieDifficulty difficulty)
         {
             Difficulty = difficulty;
-
+            Debug.Log("Applying Difficutly: " + difficulty.ToString());
             switch (difficulty)
             {
                 case GoalieDifficulty.Easy:
@@ -66,7 +68,7 @@
                     DashThreshold = 0.4f;
                     CancelThreshold = 0.05f;
                     ReactionTime = 0.15f;
-                    MaxRotationAngle = 60f;
+                    MaxRotationAngle = 75f;
                     RotationSpeed = 12f;
                     DistanceFromNet = 1.2f;
                     break;
@@ -77,7 +79,7 @@
                     DashThreshold = 0.2f;
                     CancelThreshold = 0.05f;
                     ReactionTime = 0.15f;
-                    MaxRotationAngle = 80f;
+                    MaxRotationAngle = 85f;
                     RotationSpeed = 18f;
                     DistanceFromNet = 1.4f;
                     break;

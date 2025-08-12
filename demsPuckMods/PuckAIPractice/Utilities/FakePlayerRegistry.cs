@@ -13,7 +13,7 @@ namespace PuckAIPractice.Utilities
             {
                 if (!fakePlayers.Contains(player)) fakePlayers.Add(player);
                 if (!existingBots.Contains(player)) existingBots.Add(player);
-                Debug.Log($"[FakeRegistry] Registered {player.Username?.Value} (OwnerClientId: {player.OwnerClientId})");
+                //Debug.Log($"[FakeRegistry] Registered {player.Username?.Value} (OwnerClientId: {player.OwnerClientId})");
             }
         }
 
@@ -22,7 +22,7 @@ namespace PuckAIPractice.Utilities
             if (player != null)
             {
                 fakePlayers.Remove(player);
-                Debug.Log($"[FakeRegistry] Unregistered {player.Username?.Value} (OwnerClientId: {player.OwnerClientId})");
+                //Debug.Log($"[FakeRegistry] Unregistered {player.Username?.Value} (OwnerClientId: {player.OwnerClientId})");
             }
         }
 

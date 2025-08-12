@@ -48,7 +48,8 @@ namespace PuckAIPractice.Patches
     //                     .GetValue<Dictionary<Player, VisualElement>>()
     //                     .TryGetValue(player, out visualElement))
     //            return;
-
+    //        Debug.Log("Player Position");
+    //        Debug.Log(player.PlayerPosition.Name);
     //        // Rebuild label text with our own admin prefix logic
     //        Label label6 = visualElement.Query<Label>("PositionLabel");
     //        Label usernameLabel = visualElement.Query<Label>("Username");
@@ -57,7 +58,7 @@ namespace PuckAIPractice.Patches
     //            label6.text = "G";
     //            usernameLabel.text = string.Format("{0}<noparse>#{1} {2}</noparse>", "<b><color=#992d22>BOT</color></b>", player.Number.Value, player.Username.Value);
     //        }
-            
+
     //    }
     //    static List<string> donorList = new List<string>() { "76561197994406332" };
     //    private static string GetCustomPrefix(Player player)

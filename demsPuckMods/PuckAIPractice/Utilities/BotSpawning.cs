@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using PuckAIPractice.AI;
 using PuckAIPractice.GameModes;
+using PuckAIPractice.Patches;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,20 +21,24 @@ namespace PuckAIPractice.Utilities
         static Player blueGoalie = null;
         public static void SpawnFakePlayer(int index, PlayerRole role, PlayerTeam team)
         {
+            if (!PracticeModeDetector.IsPracticeMode && !NetworkManager.Singleton.IsServer)
+            {
+                return;
+            }
             var playerManager = PlayerManager.Instance;
             if (playerManager == null)
             {
-                Debug.LogError("[FAKE_SPAWN] PlayerManager.Instance was null!");
+                //Debug.LogError("[FAKE_SPAWN] PlayerManager.Instance was null!");
                 return;
             }
 
             var prefab = Traverse.Create(playerManager).Field("playerPrefab").GetValue<Player>();
             if (prefab == null)
             {
-                Debug.LogError("[FAKE_SPAWN] Could not access playerPrefab from PlayerManager!");
+                //Debug.LogError("[FAKE_SPAWN] Could not access playerPrefab from PlayerManager!");
                 return;
             }
-            Debug.Log("Got player instance?");
+            //Debug.Log("Got player instance?");
             var playerObj = UnityEngine.Object.Instantiate(prefab);
             var netObj = playerObj.GetComponent<NetworkObject>();
 
@@ -46,7 +51,7 @@ namespace PuckAIPractice.Utilities
             player.Number.Value = index + 1;
             player.Role.Value = role;
             var position = GetNextUnclaimedPosition(player.Team.Value, player.Role.Value);
-            Debug.Log("Server Claim Role");
+            //Debug.Log("Server Claim Role");
             if (NetworkManager.Singleton.IsServer)
             {
                 if (playerObj.IsCharacterPartiallySpawned)
@@ -65,14 +70,15 @@ namespace PuckAIPractice.Utilities
             // Nudge goalie back toward the goal slightly to reduce open angles
             Vector3 neutralForward = (player.Team.Value == PlayerTeam.Red) ? Vector3.forward : Vector3.back;
             Vector3 adjustedPosition = (team == PlayerTeam.Red ? redGoal : blueGoal) + neutralForward * (team == PlayerTeam.Red ? GoalieSettings.InstanceRed.DistanceFromNet : GoalieSettings.InstanceBlue.DistanceFromNet);
-
+            player.PlayerPosition = position;
+            player.PlayerPosition.Name = "G";
             adjustedPosition.y = player.transform.position.y; // maintain height
             player.transform.position = adjustedPosition;
             player.PlayerBody.Rigidbody.position = adjustedPosition; // sync rigidbody position too
             var body = player.PlayerBody;
             var mesh = body.PlayerMesh;
             var stickMesh = body.Stick.StickMesh;
-            Debug.Log("Player Jersey - " + player.GetPlayerJerseySkin().Value.ToString());
+            //Debug.Log("Player Jersey - " + player.GetPlayerJerseySkin().Value.ToString());
             string randomJersey = RandomSkins.GetRandomJersey();
             mesh.SetJersey(player.Team.Value, randomJersey);
             player.JerseyGoalieRedSkin.Value = new FixedString32Bytes(randomJersey);
@@ -97,19 +103,20 @@ namespace PuckAIPractice.Utilities
             player.PlayerBody.Rigidbody.isKinematic = true;
             //player.PlayerInput.Client_SlideInputRpc(true);
             FakePlayerRegistry.Register(player);
+            Goalies.GoaliesAreRunning = true;
             //NetworkBehaviourSingleton<UIScoreboard>.Instance.RemovePlayer(player);
             NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(player);
-            Debug.Log($"Player Count: {PlayerManager.Instance.GetPlayers(false).Count}");
+            //Debug.Log($"Player Count: {PlayerManager.Instance.GetPlayers(false).Count}");
             UIScoreboard.Instance.UpdateServer(NetworkBehaviourSingleton<ServerManager>.Instance.Server, PlayerManager.Instance.GetPlayers(false).Count);
             //DetectPositions.UpdateLabel(player);
-            Debug.Log($"[FAKE_SPAWN] Spawned {player.Username.Value} as {player.Role.Value} on {player.Team.Value}");
+            //Debug.Log($"[FAKE_SPAWN] Spawned {player.Username.Value} as {player.Role.Value} on {player.Team.Value}");
         }
         private static PlayerPosition GetNextUnclaimedPosition(PlayerTeam team, PlayerRole? role = null)
         {
             var positionManager = PlayerPositionManager.Instance;
             if (positionManager == null)
             {
-                Debug.LogError("[FAKE_SPAWN] PlayerPositionManager.Instance was null!");
+                //Debug.LogError("[FAKE_SPAWN] PlayerPositionManager.Instance was null!");
                 return null;
             }
 
@@ -124,7 +131,7 @@ namespace PuckAIPractice.Utilities
                     positions = positionManager.RedPositions;
                     break;
                 default:
-                    Debug.LogError($"[FAKE_SPAWN] Invalid team: {team}");
+                    //Debug.LogError($"[FAKE_SPAWN] Invalid team: {team}");
                     return null;
             }
 
@@ -134,16 +141,16 @@ namespace PuckAIPractice.Utilities
                     return pos;
             }
 
-            Debug.LogWarning($"[FAKE_SPAWN] No available position found for team {team} and role {role}");
+            //Debug.LogWarning($"[FAKE_SPAWN] No available position found for team {team} and role {role}");
             return null;
         }
         public static void DespawnBots(GoalieSession type)
         {
-            Debug.Log("Started Despawn Bots");
+            //Debug.Log("Started Despawn Bots");
             HashSet<Player> players = FakePlayerRegistry.All.ToHashSet<Player>();
             if(players == null)
             {
-                Debug.Log("No Bots in Registry");
+                //Debug.Log("No Bots in Registry");
             }
             foreach (Player p in players)
             {
@@ -161,7 +168,7 @@ namespace PuckAIPractice.Utilities
                 }
                 
             }
-            Debug.Log("Finished Despawning Bots");
+            //Debug.Log("Finished Despawning Bots");
         }
         public static void Despawn(Player p)
         {
@@ -170,7 +177,7 @@ namespace PuckAIPractice.Utilities
             FakePlayerRegistry.Unregister(p);
             p.Team.Value = PlayerTeam.None;
             NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(p);
-            Debug.Log("Removed Bot From Game");
+            //Debug.Log("Removed Bot From Game");
             //EventManager.TriggerEvent("Event_Server_OnPlayerDespawned", new Dictionary<string, object> { { "player", p } });
         }
     }

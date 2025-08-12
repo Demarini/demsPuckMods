@@ -34,14 +34,14 @@ namespace PuckAIPractice
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[HarmonyLogger] Failed to patch {method.DeclaringType?.Name}.{method.Name}: {ex.Message}");
+                    //Debug.LogWarning($"[HarmonyLogger] Failed to patch {method.DeclaringType?.Name}.{method.Name}: {ex.Message}");
                 }
             }
         }
 
         private static void LogMethodPostfix(MethodBase __originalMethod)
         {
-            Debug.Log($"[Logger] {__originalMethod.DeclaringType?.Name}.{__originalMethod.Name} called");
+            //Debug.Log($"[Logger] {__originalMethod.DeclaringType?.Name}.{__originalMethod.Name} called");
         }
     }
 }

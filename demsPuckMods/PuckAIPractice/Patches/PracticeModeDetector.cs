@@ -7,12 +7,12 @@ using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
-namespace PuckAIPractice.InputControl
+namespace PuckAIPractice.Patches
 {
     [HarmonyPatch(typeof(WebSocketManager))]
     public static class PracticeModeDetector
     {
-        public static bool IsPracticeMode { get; private set; } = false;
+        public static bool IsPracticeMode { get; set; } = false;
 
         [HarmonyPostfix]
         [HarmonyPatch("Emit")]
@@ -20,17 +20,18 @@ namespace PuckAIPractice.InputControl
         {
             try
             {
-                Debug.Log("Client Start");
+                //Debug.Log("Client Start");
                 if (messageName == "serverAuthenticateRequest" && data != null && data.ContainsKey("name"))
                 {
+                    //Debug.Log("Setting Practice Mode");
                     string name = data["name"]?.ToString() ?? "";
+                    //Debug.Log(name.ToUpperInvariant());
                     IsPracticeMode = name.ToUpperInvariant() == "PRACTICE";
 
-                    IsPracticeMode = true;
                     if (ConfigData.Instance.StartWithBlueGoalie)
                     {
-                        Debug.Log("starting with blue goalie");
-                        Debug.Log(ConfigData.Instance.BlueGoalieDefaultDifficulty.ToString());
+                        //Debug.Log("starting with blue goalie");
+                        //Debug.Log(ConfigData.Instance.BlueGoalieDefaultDifficulty.ToString());
                         //GoalieSettings.InstanceBlue.ApplyDifficulty(ConfigData.Instance.BlueGoalieDefaultDifficulty);
                         //Goalies.StartGoalieSessionViaCoroutine(GoalieSession.Blue);
                     }
@@ -50,14 +51,14 @@ namespace PuckAIPractice.InputControl
 
         public static void OnClientStart(string ip, ushort port, string password, string connectionDataJson)
         {
-            Debug.Log("Client Start");
+            //Debug.Log("Client Start");
             IsPracticeMode = false;
 
             try
             {
                 if (connectionDataJson != null && connectionDataJson.Contains("\"name\":\"PRACTICE\""))
                 {
-                    
+                    //Debug.Log("Practice Mode");
                     //InputControlLogger.Log(LogCategory.PracticeModeDetection, "Practice Mode Detected via ConnectionManager: True");
                 }
             }

@@ -102,7 +102,7 @@ namespace PuckAIPractice.AI
         void Update()
         {
             if (controlledPlayer == null || !FakePlayerRegistry.All.Contains(controlledPlayer)) return;
-            if (!ConfigData.Instance.IsServer)
+            if (PracticeModeDetector.IsPracticeMode)
             {
                 //Debug.Log("Finding Single Puck");
                 ResolvePuckReference();

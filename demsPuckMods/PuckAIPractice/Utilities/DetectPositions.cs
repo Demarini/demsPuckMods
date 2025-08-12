@@ -10,6 +10,9 @@ using UnityEngine.UIElements;
 using PuckAIPractice.Singletons;
 using HarmonyLib;
 using Unity.Mathematics.Geometry;
+using PuckAIPractice.GameModes;
+using Unity.Netcode;
+using PuckAIPractice.Patches;
 
 namespace PuckAIPractice.Utilities
 {
@@ -23,6 +26,10 @@ namespace PuckAIPractice.Utilities
 
             if (frameCounter >= 10) // every 10 frames
             {
+                if (!PracticeModeDetector.IsPracticeMode && !NetworkManager.Singleton.IsServer)
+                {
+                    return;
+                }
                 frameCounter = 0; // reset
                 DetectOpenGoalAndSpawnBot();
             }
@@ -63,7 +70,7 @@ namespace PuckAIPractice.Utilities
             {
                 //Debug.Log($"Player Count: {players.Count()}");
                 if (existingBots.Contains(p)) continue;
-                if (p.Role.Value == PlayerRole.Goalie)
+                if (p.Role.Value == PlayerRole.Goalie && p.IsSpawned && p.PlayerBody != null)
                 {
                     if (p.Team.Value == PlayerTeam.Red)
                     {
@@ -90,7 +97,6 @@ namespace PuckAIPractice.Utilities
                 if (!hasBlueBot)
                 {
                     //Debug.Log("Spawning Blue Bot");
-                    GoalieSettings.InstanceBlue.ApplyDifficulty(ConfigData.Instance.BlueGoalieDefaultDifficulty);
                     BotSpawning.SpawnFakePlayer(0, PlayerRole.Goalie, PlayerTeam.Blue);
                 }
             }
@@ -105,7 +111,6 @@ namespace PuckAIPractice.Utilities
             {
                 if (!hasRedBot)
                 {
-                    GoalieSettings.InstanceRed.ApplyDifficulty(ConfigData.Instance.RedGoalieDefaultDifficulty);
                     BotSpawning.SpawnFakePlayer(1, PlayerRole.Goalie, PlayerTeam.Red);
                 }
             }

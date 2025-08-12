@@ -13,6 +13,7 @@ using UnityEngine.UIElements;
 using static UnityEngine.EventSystems.EventTrigger;
 using PuckAIPractice.Config;
 using PuckAIPractice.Singletons;
+using PuckAIPractice.AI;
 namespace PuckAIPractice
 {
     public class InitializePuckAI : IPuckMod
@@ -28,6 +29,9 @@ namespace PuckAIPractice
                 ModConfig.Initialize();
                 DetectPositions.Create();
                 ConfigData.Load();
+                Goalies.GoaliesAreRunning = true;
+                GoalieSettings.InstanceBlue.ApplyDifficulty(ConfigData.Instance.BlueGoalieDefaultDifficulty);
+                GoalieSettings.InstanceRed.ApplyDifficulty(ConfigData.Instance.RedGoalieDefaultDifficulty);
                 harmony.PatchAll();
                 //HarmonyLogger.PatchSpecificMethods(harmony, typeof(Player), new List<string>() { "OnNetworkSpawn", "OnNetworkPostSpawn", "Client_SetPlayerStateRpc", "Server_RespawnCharacter", "Server_DespawnCharacter" });
                 //HarmonyLogger.PatchAllMethods(harmony, typeof(UIManager));

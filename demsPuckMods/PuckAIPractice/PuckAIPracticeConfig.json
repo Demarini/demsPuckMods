@@ -1,6 +1,6 @@
 {
-  "StartWithBlueGoalie": true,
-  "StartWithRedGoalie": true,
+  "StartWithBlueGoalie": true, //deprecated, i feel like if you don't want goalies spawning just disable the mod lol. would make more sense than updating the config and then restarting your game.
+  "StartWithRedGoalie": true, //deprecated
   "RedGoalieDefaultDifficulty": 1, //0 = easy, 1 = normal, 2 = hard
   "BlueGoalieDefaultDifficulty": 1 //0 = easy, 1 = normal, 2 = hard
 }
