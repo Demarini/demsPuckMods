@@ -70,8 +70,6 @@ namespace PuckAIPractice.Utilities
             // Nudge goalie back toward the goal slightly to reduce open angles
             Vector3 neutralForward = (player.Team.Value == PlayerTeam.Red) ? Vector3.forward : Vector3.back;
             Vector3 adjustedPosition = (team == PlayerTeam.Red ? redGoal : blueGoal) + neutralForward * (team == PlayerTeam.Red ? GoalieSettings.InstanceRed.DistanceFromNet : GoalieSettings.InstanceBlue.DistanceFromNet);
-            player.PlayerPosition = position;
-            player.PlayerPosition.Name = "G";
             adjustedPosition.y = player.transform.position.y; // maintain height
             player.transform.position = adjustedPosition;
             player.PlayerBody.Rigidbody.position = adjustedPosition; // sync rigidbody position too
