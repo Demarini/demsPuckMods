@@ -49,8 +49,9 @@ namespace PuckAIPractice.Patches
             Rigidbody rb = __instance.Rigidbody;
             float dashVelocity = traverse.Field("dashVelocity").GetValue<float>();
             float dashDragTime = traverse.Field("dashDragTime").GetValue<float>();
+            float originalZ = rb.position.z;
             Vector3 dashTarget = rb.position + dashDir * dashVelocity;
-
+            dashTarget.z = originalZ;
             // Kill old tweens before creating new ones
             state.MoveTween?.Kill();
             state.DragTween?.Kill();
@@ -341,44 +342,7 @@ namespace PuckAIPractice.Patches
             return false; // skip original
         }
     }
-    //[HarmonyPatch(typeof(UIScoreboard), "UpdatePlayer")]
-    //public static class UIScoreboard_UpdatePlayer_Patch
-    //{
-    //    public static void Postfix(UIScoreboard __instance, Player player)
-    //    {
-    //        if (__instance == null || player == null)
-    //            return;
 
-    //        // Grab the visual element associated with this player
-    //        VisualElement visualElement;
-    //        if (!Traverse.Create(__instance)
-    //                     .Field("playerVisualElementMap")
-    //                     .GetValue<Dictionary<Player, VisualElement>>()
-    //                     .TryGetValue(player, out visualElement))
-    //            return;
-
-    //        // Rebuild label text with our own admin prefix logic
-    //        Label usernameLabel = visualElement.Query<Label>("UsernameLabel");
-    //        if (usernameLabel == null)
-    //            return;
-
-    //        string prefix = GetCustomPrefix(player);
-    //        usernameLabel.text = string.Format("{0}<noparse>#{1} {2}</noparse>", prefix, player.Number.Value, player.Username.Value);
-    //    }
-    //    static List<string> donorList = new List<string>() { "76561197994406332" };
-    //    private static string GetCustomPrefix(Player player)
-    //    {
-            
-    //        if (donorList.Contains(player.SteamId.Value.ToString()))
-    //        {
-    //            return $"<b><color=#00aaff>DEM :o</color></b>";
-    //        }
-    //        else
-    //        {
-    //            return $"<b><color=#00aaff>[demBot3000]</color></b>";
-    //        }
-    //    }
-    //}
     [HarmonyPatch(typeof(PlayerBodyV2), "FixedUpdate")]
     public static class PlayerBodyV2_FixedUpdate_Patch
     {

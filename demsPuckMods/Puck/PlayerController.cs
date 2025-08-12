@@ -109,6 +109,7 @@ public class PlayerController : NetworkBehaviour
 		if (player && player.OwnerClientId == base.OwnerClientId)
 		{
 			Debug.Log(string.Format("[PlayerController] Player {0} ({1}) was unassigned position {2}", this.player.Username.Value, this.player.OwnerClientId, playerPosition.Name));
+			Debug.Log(default(NetworkObjectReference));
 			this.player.PlayerPositionReference.Value = default(NetworkObjectReference);
 		}
 		if (player2 && player2.OwnerClientId == base.OwnerClientId)

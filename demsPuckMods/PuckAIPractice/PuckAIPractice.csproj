@@ -54,12 +54,15 @@
     <Compile Include="GameModes\GoalieRunner.cs" />
     <Compile Include="GameModes\Goalies.cs" />
     <Compile Include="Patches\BotInputPatch.cs" />
+    <Compile Include="Patches\PlayerPatch.cs" />
     <Compile Include="Patches\PlayerSearch.cs" />
     <Compile Include="Patches\PracticeModeDetector.cs" />
     <Compile Include="Patches\ProcessChatCommands.cs" />
     <Compile Include="Patches\ServerManagerPatch.cs" />
+    <Compile Include="Patches\UIPatch.cs" />
     <Compile Include="Singletons\ConfigData.cs" />
     <Compile Include="Utilities\BotSpawning.cs" />
+    <Compile Include="Utilities\DetectPositions.cs" />
     <Compile Include="Utilities\FakePlayerRegistry.cs" />
     <Compile Include="Utilities\LogFunctions.cs" />
     <Compile Include="Utilities\RandomSkins.cs" />

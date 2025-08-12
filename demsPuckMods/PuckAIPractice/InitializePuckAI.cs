@@ -26,6 +26,7 @@ namespace PuckAIPractice
             {
                 GoalieRunner.Initialize();
                 ModConfig.Initialize();
+                DetectPositions.Create();
                 ConfigData.Load();
                 harmony.PatchAll();
                 //HarmonyLogger.PatchSpecificMethods(harmony, typeof(Player), new List<string>() { "OnNetworkSpawn", "OnNetworkPostSpawn", "Client_SetPlayerStateRpc", "Server_RespawnCharacter", "Server_DespawnCharacter" });
@@ -66,11 +67,11 @@ namespace PuckAIPractice
 
             if (newGameState.Phase != GamePhase.Warmup && newGameState.Phase != GamePhase.Playing)
             {
-                Debug.Log($"[FAKE_SPAWN] Skipped spawn — new state is {newGameState}");
+                Debug.Log($"[FAKE_SPAWN] Skipped spawn — new state is {newGameState.Phase}");
                 return;
             }
 
-            Debug.Log($"[FAKE_SPAWN] State changed from {oldGameState} to {newGameState}. Injecting fake players...");
+            Debug.Log($"[FAKE_SPAWN] State changed from {oldGameState.Phase} to {newGameState.Phase}. Injecting fake players...");
 
             //for (int i = 0; i < 9; i++)
             //    SpawnFakePlayer(i, PlayerRole.Attacker, (i % 2 == 0) ? PlayerTeam.Blue : PlayerTeam.Red);

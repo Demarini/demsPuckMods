@@ -68,7 +68,7 @@
                     ReactionTime = 0.15f;
                     MaxRotationAngle = 60f;
                     RotationSpeed = 12f;
-                    DistanceFromNet = .7f;
+                    DistanceFromNet = 1.2f;
                     break;
 
                 case GoalieDifficulty.Hard:
@@ -79,7 +79,7 @@
                     ReactionTime = 0.15f;
                     MaxRotationAngle = 80f;
                     RotationSpeed = 18f;
-                    DistanceFromNet = .5f;
+                    DistanceFromNet = 1.4f;
                     break;
             }
         }

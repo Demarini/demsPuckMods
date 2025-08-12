@@ -82,5 +82,6 @@ namespace PuckAIPractice.Singletons
         public bool StartWithRedGoalie { get; set; } = false;
         public GoalieDifficulty RedGoalieDefaultDifficulty { get; set; } = GoalieDifficulty.Normal;
         public GoalieDifficulty BlueGoalieDefaultDifficulty { get; set; } = GoalieDifficulty.Normal;
+        public bool IsServer { get; set; } = true;
     }
 }

@@ -30,13 +30,14 @@ namespace PuckAIPractice.InputControl
                     if (ConfigData.Instance.StartWithBlueGoalie)
                     {
                         Debug.Log("starting with blue goalie");
-                        GoalieSettings.InstanceRed.ApplyDifficulty(ConfigData.Instance.BlueGoalieDefaultDifficulty);
-                        Goalies.StartGoalieSessionViaCoroutine(GoalieSession.Blue);
+                        Debug.Log(ConfigData.Instance.BlueGoalieDefaultDifficulty.ToString());
+                        //GoalieSettings.InstanceBlue.ApplyDifficulty(ConfigData.Instance.BlueGoalieDefaultDifficulty);
+                        //Goalies.StartGoalieSessionViaCoroutine(GoalieSession.Blue);
                     }
                     if (ConfigData.Instance.StartWithRedGoalie)
                     {
-                        GoalieSettings.InstanceRed.ApplyDifficulty(ConfigData.Instance.RedGoalieDefaultDifficulty);
-                        Goalies.StartGoalieSessionViaCoroutine(GoalieSession.Red);
+                        //GoalieSettings.InstanceRed.ApplyDifficulty(ConfigData.Instance.RedGoalieDefaultDifficulty);
+                        //Goalies.StartGoalieSessionViaCoroutine(GoalieSession.Red);
                     }
                     //InputControlLogger.Log(LogCategory.PracticeModeDetection, $"Practice Mode Detected: {IsPracticeMode}");
                 }

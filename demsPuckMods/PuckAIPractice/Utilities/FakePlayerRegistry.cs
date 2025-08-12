@@ -6,12 +6,13 @@ namespace PuckAIPractice.Utilities
     public static class FakePlayerRegistry
     {
         private static readonly HashSet<Player> fakePlayers = new HashSet<Player>();
-
+        private static readonly HashSet<Player> existingBots = new HashSet<Player>();
         public static void Register(Player player)
         {
             if (player != null)
             {
-                fakePlayers.Add(player);
+                if (!fakePlayers.Contains(player)) fakePlayers.Add(player);
+                if (!existingBots.Contains(player)) existingBots.Add(player);
                 Debug.Log($"[FakeRegistry] Registered {player.Username?.Value} (OwnerClientId: {player.OwnerClientId})");
             }
         }
@@ -33,5 +34,6 @@ namespace PuckAIPractice.Utilities
         }
 
         public static IEnumerable<Player> All => fakePlayers;
+        public static IEnumerable<Player> AllExisting => existingBots;
     }
 }

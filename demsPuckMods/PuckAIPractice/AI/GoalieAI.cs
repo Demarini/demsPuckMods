@@ -1,8 +1,11 @@
 ﻿using PuckAIPractice.Patches;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using Unity.Mathematics.Geometry;
 using UnityEngine;
-
+using PuckAIPractice.Singletons;
+using PuckAIPractice.Utilities;
 namespace PuckAIPractice.AI
 {
     public class GoalieAI : MonoBehaviour
@@ -77,14 +80,62 @@ namespace PuckAIPractice.AI
         {
             return lastComputedIntercept; // or however you calculate it
         }
+        public Puck GetClosestPuck(Vector3 position, bool includeReplay = false)
+        {
+            List<Puck> pucks = NetworkBehaviourSingleton<PuckManager>.Instance.GetPucks(false);
+            var pucksToSearch = includeReplay ? pucks : pucks.Where(puck => !puck.IsReplay.Value).ToList();
+            Puck closestPuck = null;
+            float closestDistance = float.MaxValue;
+
+            foreach (var puck in pucksToSearch)
+            {
+                float distance = Vector3.Distance(position, puck.transform.position); // assuming puck has a Position property
+                if (distance < closestDistance)
+                {
+                    closestPuck = puck;
+                    closestDistance = distance;
+                }
+            }
+
+            return closestPuck;
+        }
         void Update()
         {
-            if (controlledPlayer == null) return;
-
-            ResolvePuckReference();
+            if (controlledPlayer == null || !FakePlayerRegistry.All.Contains(controlledPlayer)) return;
+            if (!ConfigData.Instance.IsServer)
+            {
+                //Debug.Log("Finding Single Puck");
+                ResolvePuckReference();
+            }
+            else
+            {
+                //Debug.Log("Looping All Pucks");
+                Puck puck = GetClosestPuck(controlledPlayer.Team.Value == PlayerTeam.Blue ? blueGoal : redGoal, false);
+                if(puck != null)
+                {
+                    //Debug.Log("Found Puck!");
+                    puckTransform = puck.transform;
+                }
+                else
+                {
+                    //Debug.Log("Game Started?");
+                    Puck puck2 = NetworkBehaviourSingleton<PuckManager>.Instance.GetPuck(false);
+                    if(puck2 == null)
+                    {
+                       //Debug.Log("No puck found return");
+                        return;
+                    }
+                    else
+                    {
+                        puckTransform = puck2.transform;
+                    }
+                }
+                //Debug.Log("Finished Looping Pucks");
+            }
+            
             InitializeBody();
             //InitializeInterceptVisuals();
-
+            //Debug.Log("Get Rotations");
             Quaternion neutralRotation = GetNeutralRotation();
             Vector3 neutralForward = GetNeutralForward();
 
@@ -100,6 +151,7 @@ namespace PuckAIPractice.AI
             Vector3 netToPuck = puckPos - goalCenter;
             Vector3 netForward = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.back : Vector3.forward;
             float forwardDot = Vector3.Dot(neutralForward, netToPuck.normalized);
+            //Debug.Log("Got To Check Behind Net");
             if(forwardDot < .5f)
             {
                 if(controlledPlayer.Team.Value == PlayerTeam.Red)
@@ -165,6 +217,7 @@ namespace PuckAIPractice.AI
             lastComputedIntercept = projectedPoint;
             //Debug.Log($"[Update] Calling HandleDashLogic (isPreparingDash: {isPreparingDash})");
             //Debug.Log($"[NeutralRotation] {neutralRotation.eulerAngles}");
+            //Debug.Log("Handle Dash Logic");
             HandleDashLogic(toPuck, neutralRotation, lateralDistance, signedLateralOffset, projectedPoint);
             //UpdateInterceptVisual(projectedPoint);
             //UpdatePuckLine(goalCenter, puckPos);

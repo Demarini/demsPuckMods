@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Unity.Collections;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -13,6 +14,10 @@ namespace PuckAIPractice.Utilities
 {
     public static class BotSpawning
     {
+        static Vector3 redGoal = new Vector3(0.0f, 0f, -40.23f);
+        static Vector3 blueGoal = new Vector3(0.0f, 0f, 40.23f);
+        static Player redGoalie = null;
+        static Player blueGoalie = null;
         public static void SpawnFakePlayer(int index, PlayerRole role, PlayerTeam team)
         {
             var playerManager = PlayerManager.Instance;
@@ -32,20 +37,34 @@ namespace PuckAIPractice.Utilities
             var playerObj = UnityEngine.Object.Instantiate(prefab);
             var netObj = playerObj.GetComponent<NetworkObject>();
 
-            ulong fakeClientId = 9990UL + (ulong)index;
+            ulong fakeClientId = 7777777UL + (ulong)index;
             netObj.SpawnWithOwnership(fakeClientId, true);
 
             var player = playerObj.GetComponent<Player>();
-            player.Username.Value = $"demBot_{index + 1}";
+            player.Username.Value = $"demBot{team.ToString()}_{(team == PlayerTeam.Red ? GoalieSettings.InstanceRed.Difficulty.ToString() : GoalieSettings.InstanceBlue.Difficulty.ToString())}";
             player.Team.Value = team;
             player.Number.Value = index + 1;
             player.Role.Value = role;
             var position = GetNextUnclaimedPosition(player.Team.Value, player.Role.Value);
             Debug.Log("Server Claim Role");
-            position.Server_Claim(player);
+            if (NetworkManager.Singleton.IsServer)
+            {
+                if (playerObj.IsCharacterPartiallySpawned)
+                {
+                    playerObj.Server_DespawnCharacter();
+                    playerObj.Server_SpawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), role);
+                    return;
+                }
+                else
+                {
+                    playerObj.Server_SpawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), role);
+                }
+            }
+            //playerObj.Server_RespawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), PlayerRole.Goalie);
+            //position.Server_Claim(player);
             // Nudge goalie back toward the goal slightly to reduce open angles
             Vector3 neutralForward = (player.Team.Value == PlayerTeam.Red) ? Vector3.forward : Vector3.back;
-            Vector3 adjustedPosition = player.transform.position - neutralForward * (team == PlayerTeam.Red ? GoalieSettings.InstanceRed.DistanceFromNet : GoalieSettings.InstanceBlue.DistanceFromNet);
+            Vector3 adjustedPosition = (team == PlayerTeam.Red ? redGoal : blueGoal) + neutralForward * (team == PlayerTeam.Red ? GoalieSettings.InstanceRed.DistanceFromNet : GoalieSettings.InstanceBlue.DistanceFromNet);
 
             adjustedPosition.y = player.transform.position.y; // maintain height
             player.transform.position = adjustedPosition;
@@ -53,8 +72,11 @@ namespace PuckAIPractice.Utilities
             var body = player.PlayerBody;
             var mesh = body.PlayerMesh;
             var stickMesh = body.Stick.StickMesh;
-            Debug.Log("Player Jersey - " + player.GetPlayerJerseySkin().ToString());
-            mesh.SetJersey(player.Team.Value, RandomSkins.GetRandomJersey());
+            Debug.Log("Player Jersey - " + player.GetPlayerJerseySkin().Value.ToString());
+            string randomJersey = RandomSkins.GetRandomJersey();
+            mesh.SetJersey(player.Team.Value, randomJersey);
+            player.JerseyGoalieRedSkin.Value = new FixedString32Bytes(randomJersey);
+            player.JerseyGoalieBlueSkin.Value = new FixedString32Bytes(randomJersey);
             mesh.SetNumber(player.Number.Value.ToString());
             mesh.SetUsername(player.Username.Value.ToString());
             mesh.SetRole(player.Role.Value);
@@ -74,7 +96,12 @@ namespace PuckAIPractice.Utilities
             //ai.puckTransform = FindObjectOfType<Puck>()?.transform;
             player.PlayerBody.Rigidbody.isKinematic = true;
             //player.PlayerInput.Client_SlideInputRpc(true);
-            FakePlayerRegistry.Register(player);         
+            FakePlayerRegistry.Register(player);
+            //NetworkBehaviourSingleton<UIScoreboard>.Instance.RemovePlayer(player);
+            NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(player);
+            Debug.Log($"Player Count: {PlayerManager.Instance.GetPlayers(false).Count}");
+            UIScoreboard.Instance.UpdateServer(NetworkBehaviourSingleton<ServerManager>.Instance.Server, PlayerManager.Instance.GetPlayers(false).Count);
+            //DetectPositions.UpdateLabel(player);
             Debug.Log($"[FAKE_SPAWN] Spawned {player.Username.Value} as {player.Role.Value} on {player.Team.Value}");
         }
         private static PlayerPosition GetNextUnclaimedPosition(PlayerTeam team, PlayerRole? role = null)
@@ -138,16 +165,13 @@ namespace PuckAIPractice.Utilities
         }
         public static void Despawn(Player p)
         {
-            p.PlayerPosition.Server_Unclaim();
             p.Server_DespawnCharacter();
-            p.Server_DespawnSpectatorCamera();
-            p.Team.Value = PlayerTeam.None;
-            Debug.Log("Removed Bot From Game");
-            NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(p);
             p.NetworkObject.Despawn(true);
-            UIScoreboard.Instance.RemovePlayer(p);
-            //EventManager.TriggerEvent("Event_Server_OnPlayerDespawned", new Dictionary<string, object> { { "player", p } });
             FakePlayerRegistry.Unregister(p);
+            p.Team.Value = PlayerTeam.None;
+            NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(p);
+            Debug.Log("Removed Bot From Game");
+            //EventManager.TriggerEvent("Event_Server_OnPlayerDespawned", new Dictionary<string, object> { { "player", p } });
         }
     }
 }
