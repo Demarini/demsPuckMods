@@ -4,10 +4,12 @@ using PuckAIPractice.GameModes;
 using PuckAIPractice.Patches;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Collections;
+using Unity.Mathematics.Geometry;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -177,6 +179,86 @@ namespace PuckAIPractice.Utilities
             NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(p);
             //Debug.Log("Removed Bot From Game");
             //EventManager.TriggerEvent("Event_Server_OnPlayerDespawned", new Dictionary<string, object> { { "player", p } });
+        }
+        public static void DetectOpenGoalAndSpawnBot()
+        {
+            
+            List<Player> players = PlayerManager.Instance.GetPlayers(false);
+            bool hasBlueGoalie = false;
+            bool hasRedGoalie = false;
+            bool hasRedBot = false;
+            bool hasBlueBot = false;
+            Player blueBot = null;
+            Player redBot = null;
+            List<Player> bots = FakePlayerRegistry.All.ToList();
+            List<Player> existingBots = FakePlayerRegistry.AllExisting.ToList();
+            foreach (Player b in bots)
+            {
+                if (b.Team.Value == PlayerTeam.Blue)
+                {
+                    //Debug.Log("Has Blue Bot: " + b.Username.Value);
+                    hasBlueBot = true;
+                    blueBot = b;
+                }
+                else
+                {
+                    //Debug.Log("Has Red Bot: " + b.Username.Value);
+                    hasRedBot = true;
+                    redBot = b;
+                }
+            }
+            foreach (Player p in players)
+            {
+                //Debug.Log($"Player Count: {players.Count()}");
+                if (existingBots.Contains(p)) continue;
+                if (p.Role.Value == PlayerRole.Goalie && p.IsSpawned && p.PlayerBody != null)
+                {
+                    if (p.Team.Value == PlayerTeam.Red)
+                    {
+                        //Debug.Log("Has Red Goalie: " + p.Username.Value);
+                        hasRedGoalie = true;
+                    }
+                    else
+                    {
+                        //Debug.Log("Has Blue Goalie: " + p.Username.Value);
+                        hasBlueGoalie = true;
+                    }
+                }
+            }
+            if (hasBlueGoalie)
+            {
+                if (hasBlueBot)
+                {
+                    //Debug.Log("Despawning Blue Bot");
+                    BotSpawning.Despawn(blueBot);
+                }
+            }
+            else
+            {
+                if (!hasBlueBot)
+                {
+                    //Debug.Log("Spawning Blue Bot");
+                    BotSpawning.SpawnFakePlayer(0, PlayerRole.Goalie, PlayerTeam.Blue);
+                }
+            }
+            if (hasRedGoalie)
+            {
+                if (hasRedBot)
+                {
+                    BotSpawning.Despawn(redBot);
+                }
+            }
+            else
+            {
+                if (!hasRedBot)
+                {
+                    BotSpawning.SpawnFakePlayer(1, PlayerRole.Goalie, PlayerTeam.Red);
+                }
+            }
+            // Optionally, you can prevent the original method from running by returning false
+            // return false;
+
+            // Return true to allow the original method to execute after the prefix
         }
     }
 }

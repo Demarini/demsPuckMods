@@ -61,6 +61,7 @@
     <Compile Include="Patches\ServerManagerPatch.cs" />
     <Compile Include="Patches\UIPatch.cs" />
     <Compile Include="Patches\VotingPatch.cs" />
+    <Compile Include="ReplayRecorderPatch.cs" />
     <Compile Include="Singletons\ConfigData.cs" />
     <Compile Include="Utilities\BotSpawning.cs" />
     <Compile Include="Utilities\DetectPositions.cs" />

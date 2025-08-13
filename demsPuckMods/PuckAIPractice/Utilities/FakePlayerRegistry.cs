@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace PuckAIPractice.Utilities
@@ -12,8 +13,11 @@ namespace PuckAIPractice.Utilities
             if (player != null)
             {
                 if (!fakePlayers.Contains(player)) fakePlayers.Add(player);
-                if (!existingBots.Contains(player)) existingBots.Add(player);
-                //Debug.Log($"[FakeRegistry] Registered {player.Username?.Value} (OwnerClientId: {player.OwnerClientId})");
+                if (!existingBots.Any(p => p.OwnerClientId == player.OwnerClientId))
+                {
+                    existingBots.Add(player);
+                }
+                Debug.Log($"[FakeRegistry] Registered {player.Username?.Value} (OwnerClientId: {player.OwnerClientId})");
             }
         }
 
