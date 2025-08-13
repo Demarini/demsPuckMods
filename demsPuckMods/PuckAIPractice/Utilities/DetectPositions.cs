@@ -31,7 +31,7 @@ namespace PuckAIPractice.Utilities
                 {
                     if(GameManager.Instance.Phase == GamePhase.Replay)
                     {
-                        BotSpawning.DespawnBots(GoalieSession.Both);
+                        BotSpawning.DespawnBots(GoalieSession.Both, true);
                     }
                     return;
                 }

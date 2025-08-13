@@ -40,6 +40,19 @@ namespace PuckAIPractice.Utilities
                 //Debug.LogError("[FAKE_SPAWN] Could not access playerPrefab from PlayerManager!");
                 return;
             }
+            if(FakePlayerRegistry.All.Count() == 2)
+            {
+                if (FakePlayerRegistry.All.ToList()[0].Team.Value == team)
+                {
+                    ReplayVisibility.ExitReplayStasis(FakePlayerRegistry.All.ToList()[0]);
+                }
+                else
+                {
+                    ReplayVisibility.ExitReplayStasis(FakePlayerRegistry.All.ToList()[1]);
+                }
+                
+                return;
+            }
             //Debug.Log("Got player instance?");
             var playerObj = UnityEngine.Object.Instantiate(prefab);
             var netObj = playerObj.GetComponent<NetworkObject>();
@@ -144,7 +157,7 @@ namespace PuckAIPractice.Utilities
             //Debug.LogWarning($"[FAKE_SPAWN] No available position found for team {team} and role {role}");
             return null;
         }
-        public static void DespawnBots(GoalieSession type)
+        public static void DespawnBots(GoalieSession type, bool isReplay = false)
         {
             //Debug.Log("Started Despawn Bots");
             HashSet<Player> players = FakePlayerRegistry.All.ToHashSet<Player>();
@@ -156,22 +169,54 @@ namespace PuckAIPractice.Utilities
             {
                 if(type == GoalieSession.Blue && p.Team.Value == PlayerTeam.Blue)
                 {
-                    Despawn(p);
+                    if (!isReplay)
+                    {
+                        Despawn(p);
+                    }
+                    else
+                    {
+                        DespawnForReplay(p);
+                    } 
                 }
                 else if(type == GoalieSession.Red && p.Team.Value == PlayerTeam.Red)
                 {
-                    Despawn(p);
+                    if (!isReplay)
+                    {
+                        Despawn(p);
+                    }
+                    else
+                    {
+                        DespawnForReplay(p);
+                    }
                 }
                 else if(type == GoalieSession.Both)
                 {
-                    Despawn(p);
+                    if (!isReplay)
+                    {
+                        Despawn(p);
+                    }
+                    else
+                    {
+                        DespawnForReplay(p);
+                    };
                 }
-                
             }
             //Debug.Log("Finished Despawning Bots");
         }
+        public static void DespawnForReplay(Player p)
+        {
+            ReplayVisibility.EnterReplayStasis(p);
+            //p.Server_DespawnCharacter();
+            //p.NetworkObject.Despawn(true);
+            //FakePlayerRegistry.Unregister(p);
+            //p.Team.Value = PlayerTeam.None;
+            //NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(p);
+            //Debug.Log("Removed Bot From Game");
+            //EventManager.TriggerEvent("Event_Server_OnPlayerDespawned", new Dictionary<string, object> { { "player", p } });
+        }
         public static void Despawn(Player p)
         {
+            //ReplayVisibility.EnterReplayStasis(p);
             p.Server_DespawnCharacter();
             p.NetworkObject.Despawn(true);
             FakePlayerRegistry.Unregister(p);
