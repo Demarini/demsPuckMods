@@ -21,6 +21,7 @@ namespace PuckAIPractice.Utilities
         static Vector3 blueGoal = new Vector3(0.0f, 0f, 40.23f);
         static Player redGoalie = null;
         static Player blueGoalie = null;
+        static int botIndex = 0;
         public static void SpawnFakePlayer(int index, PlayerRole role, PlayerTeam team)
         {
             if (!PracticeModeDetector.IsPracticeMode && !NetworkManager.Singleton.IsServer)
@@ -44,13 +45,14 @@ namespace PuckAIPractice.Utilities
             var playerObj = UnityEngine.Object.Instantiate(prefab);
             var netObj = playerObj.GetComponent<NetworkObject>();
 
-            ulong fakeClientId = 7777777UL + (ulong)index;
+            ulong fakeClientId = 7777777UL + (ulong)(botIndex);
+            botIndex++;
             netObj.SpawnWithOwnership(fakeClientId, true);
 
             var player = playerObj.GetComponent<Player>();
             player.Username.Value = $"demBot{team.ToString()}_{(team == PlayerTeam.Red ? GoalieSettings.InstanceRed.Difficulty.ToString() : GoalieSettings.InstanceBlue.Difficulty.ToString())}";
             player.Team.Value = team;
-            player.Number.Value = index + 1;
+            player.Number.Value = 7;
             player.Role.Value = role;
             var position = GetNextUnclaimedPosition(player.Team.Value, player.Role.Value);
             //Debug.Log("Server Claim Role");
@@ -80,9 +82,18 @@ namespace PuckAIPractice.Utilities
             var stickMesh = body.Stick.StickMesh;
             //Debug.Log("Player Jersey - " + player.GetPlayerJerseySkin().Value.ToString());
             string randomJersey = RandomSkins.GetRandomJersey();
+            string randomStick = RandomSkins.GetRandomStickSkin(role);
+            string randomShaftTape = RandomSkins.GetRandomShaftTape(role);
+            string randomBladeTape = RandomSkins.GetRandomBladeTape(role);
             mesh.SetJersey(player.Team.Value, randomJersey);
             player.JerseyGoalieRedSkin.Value = new FixedString32Bytes(randomJersey);
             player.JerseyGoalieBlueSkin.Value = new FixedString32Bytes(randomJersey);
+            player.StickGoalieRedSkin.Value = new FixedString32Bytes(randomStick);
+            player.StickGoalieBlueSkin.Value = new FixedString32Bytes(randomStick);
+            player.StickBladeGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
+            player.StickBladeGoalieRedTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
+            player.StickShaftGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
+            player.StickShaftGoalieRedTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
             mesh.SetNumber(player.Number.Value.ToString());
             mesh.SetUsername(player.Username.Value.ToString());
             mesh.SetRole(player.Role.Value);

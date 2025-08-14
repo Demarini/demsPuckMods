@@ -122,4 +122,25 @@ namespace PuckAIPractice
             }
         }
     }
+    [HarmonyPatch(typeof(ReplayPlayer), "Server_StopReplay")]
+    static class Event_OnPlayerSpawned_Prefix
+    {
+        static bool Prefix(ReplayPlayer __instance)
+        {
+            try
+            {
+                if (!NetworkManager.Singleton.IsServer)
+                {
+                    return false;
+                }
+                BotSpawning.DetectOpenGoalAndSpawnBot();
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ReplayPatch] Prefix(Event_OnPlayerSpawned) error: {e}");
+                return false;
+            }
+        }
+    }
 }
