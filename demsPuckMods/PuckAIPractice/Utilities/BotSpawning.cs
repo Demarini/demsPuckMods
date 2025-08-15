@@ -21,6 +21,8 @@ namespace PuckAIPractice.Utilities
         static Vector3 blueGoal = new Vector3(0.0f, 0f, 40.23f);
         static Player redGoalie = null;
         static Player blueGoalie = null;
+        static bool blueGoalieSpawned;
+        static bool redGoalieSpawned;
         static int botIndex = 0;
         public static void SpawnFakePlayer(int index, PlayerRole role, PlayerTeam team)
         {
@@ -54,8 +56,47 @@ namespace PuckAIPractice.Utilities
             player.Team.Value = team;
             player.Number.Value = 7;
             player.Role.Value = role;
+            string randomJersey = RandomSkins.GetRandomJersey();
+            string randomStick = RandomSkins.GetRandomStickSkin(role);
+            string randomShaftTape = RandomSkins.GetRandomShaftTape(role);
+            string randomBladeTape = RandomSkins.GetRandomBladeTape(role);
+            string randomMustache = RandomSkins.GetRandomMustache();
+            string randomBeard = RandomSkins.GetRandomBeard();
+            string flag = RandomSkins.GetRandomCountry();
+            string visor = RandomSkins.GetRandomVisor();
+            player.JerseyGoalieRedSkin.Value = new FixedString32Bytes(randomJersey);
+            player.JerseyGoalieBlueSkin.Value = new FixedString32Bytes(randomJersey);
+            player.StickGoalieRedSkin.Value = new FixedString32Bytes(randomStick);
+            player.StickGoalieBlueSkin.Value = new FixedString32Bytes(randomStick);
+            player.StickBladeGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
+            player.StickBladeGoalieRedTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
+            player.StickShaftGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
+            player.StickShaftGoalieRedTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
+            player.Mustache.Value = new FixedString32Bytes(randomMustache);
+            player.Beard.Value = new FixedString32Bytes(randomBeard);
+            player.Country.Value = new FixedString32Bytes(flag);
+            player.VisorAttackerBlueSkin.Value = new FixedString32Bytes(visor);
+            player.VisorAttackerRedSkin.Value = new FixedString32Bytes(visor);
+            player.VisorGoalieBlueSkin.Value = new FixedString32Bytes(visor);
+            player.VisorGoalieRedSkin.Value = new FixedString32Bytes(visor);
             var position = GetNextUnclaimedPosition(player.Team.Value, player.Role.Value);
-            //Debug.Log("Server Claim Role");
+            //player.PlayerPosition = new PlayerPosition();
+            //player.PlayerPosition.Name = "G";
+        //    MonoBehaviourSingleton<EventManager>.Instance.TriggerEvent("Event_OnPlayerPositionChanged", new Dictionary<string, object>
+        //{
+        //    {
+        //        "player",
+        //        player
+        //    },
+        //    {
+        //        "oldPlayerPosition",
+        //        position
+        //    },
+        //    {
+        //        "newPlayerPosition",
+        //        position
+        //    }
+        //});
             if (NetworkManager.Singleton.IsServer)
             {
                 if (playerObj.IsCharacterPartiallySpawned)
@@ -81,19 +122,7 @@ namespace PuckAIPractice.Utilities
             var mesh = body.PlayerMesh;
             var stickMesh = body.Stick.StickMesh;
             //Debug.Log("Player Jersey - " + player.GetPlayerJerseySkin().Value.ToString());
-            string randomJersey = RandomSkins.GetRandomJersey();
-            string randomStick = RandomSkins.GetRandomStickSkin(role);
-            string randomShaftTape = RandomSkins.GetRandomShaftTape(role);
-            string randomBladeTape = RandomSkins.GetRandomBladeTape(role);
             mesh.SetJersey(player.Team.Value, randomJersey);
-            player.JerseyGoalieRedSkin.Value = new FixedString32Bytes(randomJersey);
-            player.JerseyGoalieBlueSkin.Value = new FixedString32Bytes(randomJersey);
-            player.StickGoalieRedSkin.Value = new FixedString32Bytes(randomStick);
-            player.StickGoalieBlueSkin.Value = new FixedString32Bytes(randomStick);
-            player.StickBladeGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
-            player.StickBladeGoalieRedTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
-            player.StickShaftGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
-            player.StickShaftGoalieRedTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
             mesh.SetNumber(player.Number.Value.ToString());
             mesh.SetUsername(player.Username.Value.ToString());
             mesh.SetRole(player.Role.Value);
@@ -159,25 +188,25 @@ namespace PuckAIPractice.Utilities
         {
             //Debug.Log("Started Despawn Bots");
             HashSet<Player> players = FakePlayerRegistry.All.ToHashSet<Player>();
-            if(players == null)
+            if (players == null)
             {
                 //Debug.Log("No Bots in Registry");
             }
             foreach (Player p in players)
             {
-                if(type == GoalieSession.Blue && p.Team.Value == PlayerTeam.Blue)
+                if (type == GoalieSession.Blue && p.Team.Value == PlayerTeam.Blue)
                 {
                     Despawn(p);
                 }
-                else if(type == GoalieSession.Red && p.Team.Value == PlayerTeam.Red)
+                else if (type == GoalieSession.Red && p.Team.Value == PlayerTeam.Red)
                 {
                     Despawn(p);
                 }
-                else if(type == GoalieSession.Both)
+                else if (type == GoalieSession.Both)
                 {
                     Despawn(p);
                 }
-                
+
             }
             //Debug.Log("Finished Despawning Bots");
         }
@@ -193,7 +222,7 @@ namespace PuckAIPractice.Utilities
         }
         public static void DetectOpenGoalAndSpawnBot()
         {
-            
+
             List<Player> players = PlayerManager.Instance.GetPlayers(false);
             bool hasBlueGoalie = false;
             bool hasRedGoalie = false;
@@ -242,6 +271,7 @@ namespace PuckAIPractice.Utilities
                 {
                     //Debug.Log("Despawning Blue Bot");
                     BotSpawning.Despawn(blueBot);
+                    blueGoalieSpawned = false;
                 }
             }
             else
@@ -250,13 +280,16 @@ namespace PuckAIPractice.Utilities
                 {
                     //Debug.Log("Spawning Blue Bot");
                     BotSpawning.SpawnFakePlayer(0, PlayerRole.Goalie, PlayerTeam.Blue);
+                    blueGoalieSpawned = true;
                 }
             }
             if (hasRedGoalie)
             {
                 if (hasRedBot)
                 {
+                    //Debug.Log("Spawning Red Bot");
                     BotSpawning.Despawn(redBot);
+                    redGoalieSpawned = false;
                 }
             }
             else
@@ -264,6 +297,7 @@ namespace PuckAIPractice.Utilities
                 if (!hasRedBot)
                 {
                     BotSpawning.SpawnFakePlayer(1, PlayerRole.Goalie, PlayerTeam.Red);
+                    redGoalieSpawned = true;
                 }
             }
             // Optionally, you can prevent the original method from running by returning false
