@@ -35,3 +35,5 @@ demsPuckMods/ModifyMinimapIcons/.vs/
 demsPuckMods/DelayInputs/.vs/
 demsPuckMods/ServerBrowserInGame/bin/
 demsPuckMods/ServerBrowserInGame/obj/
+/demsPuckMods/ServerFavorites/bin/Debug
+/demsPuckMods/ServerFavorites/obj/Debug

@@ -9,9 +9,9 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace ServerBrowserInGame
+namespace ServerFavorites
 {
-    public class InitializeServerBrowserInGame : IPuckMod
+    public class InitializeServerFavorites : IPuckMod
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.ServerBrowserInGame");
 
@@ -21,9 +21,9 @@ namespace ServerBrowserInGame
             try
             {
                 harmony.PatchAll();
-                //FavoriteStore.InitLoad();
-                PauseMenuServerBrowserInjector.Install();
-                //ServerBrowserFavToggleInjector.Install();
+                FavoriteStore.InitLoad();
+                //PauseMenuServerBrowserInjector.Install();
+                ServerBrowserFavToggleInjector.Install();
                 //HarmonyLogger.PatchSpecificMethods(harmony, typeof(Player), new List<string>() { "OnNetworkSpawn", "OnNetworkPostSpawn", "Client_SetPlayerStateRpc", "Server_RespawnCharacter", "Server_DespawnCharacter" });
                 //HarmonyLogger.PatchAllMethods(harmony, typeof(UIManager));
             }
@@ -41,7 +41,7 @@ namespace ServerBrowserInGame
             try
             {
                 harmony.UnpatchSelf();
-                PauseMenuServerBrowserInjector.Uninstall();
+                //PauseMenuServerBrowserInjector.Uninstall();
                 ServerBrowserFavToggleInjector.Uninstall();
             }
             catch (Exception e)

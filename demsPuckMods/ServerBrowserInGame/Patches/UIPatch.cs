@@ -90,146 +90,101 @@ namespace PuckAIPractice.Patches
     //        }).StartingIn(0);
     //    }
     //}
-    [HarmonyPatch]
-    public static class FavColumn
-    {
-        private static readonly AccessTools.FieldRef<UIServerBrowser, Button> _nameHeaderRef =
-            AccessTools.FieldRefAccess<UIServerBrowser, Button>("nameHeaderButton");
-        private static readonly AccessTools.FieldRef<UIServerBrowser, Button> _playersHeaderRef =
-            AccessTools.FieldRefAccess<UIServerBrowser, Button>("playersHeaderButton");
-        private static readonly AccessTools.FieldRef<UIServerBrowser, Button> _pingHeaderRef =
-            AccessTools.FieldRefAccess<UIServerBrowser, Button>("pingHeaderButton");
-        private static readonly AccessTools.FieldRef<UIServerBrowser, List<TemplateContainer>> _serverButtonsRef =
-            AccessTools.FieldRefAccess<UIServerBrowser, List<TemplateContainer>>("serverButtons");
+   
+    //[HarmonyPatch]
+    //public static class FavOnlyFooterSimple
+    //{
+    //    private const string FavOnlyFieldName = "FavOnlyToggleField";
 
-        private static readonly HashSet<string> _favorites = new HashSet<string>();
+    //    private static readonly AccessTools.FieldRef<UIServerBrowser, VisualElement> _containerRef =
+    //        AccessTools.FieldRefAccess<UIServerBrowser, VisualElement>("container");
 
-        private const string FavHeaderName = "FavHeaderButton";
-        private const string FavCellName = "FavCell";
-        private const string FavClass = "yourmod-favcol";
+    //    [HarmonyPostfix]
+    //    [HarmonyPatch(typeof(UIServerBrowser), nameof(UIServerBrowser.Initialize), new[] { typeof(VisualElement) })]
+    //    private static void Initialize_Postfix(UIServerBrowser __instance)
+    //    {
+    //        Debug.Log("[FavOnly] Entered FavOnly");
+    //        var container = _containerRef(__instance);
+    //        if (container == null)
+    //        {
+    //            Debug.Log("[FavOnly] container == null");
+    //            return;
+    //        }
 
-        private static string Key(ServerBrowserServer s) => $"{s.ipAddress}:{s.pingPort}";
+    //        // Use the same lookup pattern the game uses
+    //        var emptyWrap = container.Query("ShowEmptyToggle").First();
+    //        var fullWrap = container.Query("ShowFullToggle").First();
 
-        private static float sPlayersColWidth = -1f;
-        private static float sPingColWidth = -1f;
+    //        // Prefer SHOW EMPTY row; fall back to SHOW FULL
+    //        var baseWrap = emptyWrap ?? fullWrap;
+    //        if (baseWrap == null)
+    //        {
+    //            Debug.Log("[FavOnly] Could not find ShowEmptyToggle nor ShowFullToggle wrappers");
+    //            return;
+    //        }
 
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(UIServerBrowser), nameof(UIServerBrowser.Initialize), new[] { typeof(VisualElement) })]
-        private static void Initialize_Postfix(UIServerBrowser __instance)
-        {
-            var playersHeader = _playersHeaderRef(__instance);
-            var pingHeader = _pingHeaderRef(__instance);
-            var headerRow = pingHeader?.parent;
-            if (headerRow == null) return;
+    //        var row = baseWrap.parent;
+    //        if (row == null)
+    //        {
+    //            Debug.Log("[FavOnly] baseWrap.parent == null");
+    //            return;
+    //        }
 
-            headerRow.style.flexWrap = Wrap.NoWrap;
+    //        // Already injected?
+    //        if (row.Q<VisualElement>(FavOnlyFieldName) != null)
+    //        {
+    //            Debug.Log("[FavOnly] Already injected");
+    //            return;
+    //        }
 
-            // read widths after first layout tick
-            headerRow.schedule.Execute(() =>
-            {
-                try
-                {
-                    if (playersHeader != null) sPlayersColWidth = playersHeader.resolvedStyle.width;
-                    if (pingHeader != null) sPingColWidth = pingHeader.resolvedStyle.width;
-                }
-                catch { /* ok */ }
-            }).StartingIn(0);
-        }
+    //        // ---- Build a sibling field that looks like the existing one ----
+    //        var favField = new VisualElement { name = FavOnlyFieldName };
+    //        foreach (var cls in baseWrap.GetClasses())
+    //            favField.AddToClassList(cls);
 
-        // ---------- ROW CELL: add to the RIGHT of PING ----------
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(UIServerBrowser), "AddServerButton", new Type[] { typeof(ServerBrowserServer), typeof(long) })]
-        private static void AddServerButton_Postfix(UIServerBrowser __instance, ServerBrowserServer server, long ping)
-        {
-            try
-            {
-                var rows = _serverButtonsRef(__instance);
-                if (rows == null) return;
+    //        favField.style.flexDirection = FlexDirection.Row;
+    //        favField.style.alignItems = Align.Center;
+    //        favField.style.justifyContent = Justify.SpaceBetween;
+    //        favField.style.flexShrink = 0;
 
-                // find the just-added row for this server
-                TemplateContainer row = null;
-                for (int i = rows.Count - 1; i >= 0; --i)
-                {
-                    var ud = rows[i].userData as Dictionary<string, object>;
-                    if (ud != null && ReferenceEquals(ud["server"], server))
-                    {
-                        row = rows[i];
-                        break;
-                    }
-                }
-                if (row == null) return;
+    //        // Clone label styling
+    //        var baseLabel = baseWrap.Q<Label>();
+    //        var lbl = new Label("SHOW ONLY FAVORITES");
+    //        if (baseLabel != null)
+    //            foreach (var c in baseLabel.GetClasses())
+    //                lbl.AddToClassList(c);
 
-                InjectFavCellToRight(row, server);
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[YourMod] Fav cell inject failed: {e}");
-            }
-        }
+    //        var tgl = new Toggle { text = string.Empty, value = false };
 
-        private static void InjectFavCellToRight(TemplateContainer row, ServerBrowserServer server)
-        {
-            var serverBtn = row.Q<Button>("ServerButton");
-            if (serverBtn == null) return;
+    //        favField.Add(lbl);
+    //        favField.Add(tgl);
 
-            // --- STAR (absolute overlay inside the button) ---
-            var fav = serverBtn.Q<Label>(FavCellName);
-            if (fav == null)
-            {
-                fav = new Label { name = FavCellName };
-                var key = Key(server);
-                fav.text = _favorites.Contains(key) ? "★" : "☆";
+    //        // Insert immediately after the base field
+    //        var idx = row.IndexOf(baseWrap);
+    //        if (idx < 0) idx = row.childCount - 1;
+    //        row.hierarchy.Insert(idx + 1, favField);
+    //        Debug.Log("[FavOnly] Injected next to " + (baseWrap == emptyWrap ? "ShowEmpty" : "ShowFull"));
 
-                // Base size off ping label font (fallback 14)
-                var pingLabelForSize = serverBtn.Q<TextElement>("PingLabel");
-                float basePx = 14f;
-                try { if (pingLabelForSize != null) basePx = pingLabelForSize.resolvedStyle.fontSize; } catch { /* ok */ }
-                var starSize = basePx * 1.5f;
+    //        // ---- Split widths AFTER layout resolves ----
+    //        void Split()
+    //        {
+    //            // We want both fields to have the same fixed width
+    //            var w = baseWrap.resolvedStyle.width;
+    //            if (w <= 0) return; // not ready yet
 
-                fav.style.position = Position.Absolute;
-                fav.style.top = 0;
-                fav.style.bottom = 0;
-                fav.style.right = 6;                 // keep inside row; no overflow
-                fav.style.width = starSize;
-                fav.style.fontSize = starSize;
-                fav.style.unityTextAlign = TextAnchor.MiddleCenter;
-                fav.style.flexShrink = 0;
-                fav.pickingMode = PickingMode.Position;
+    //            var half = Mathf.Max(120f, Mathf.Floor(w * 0.5f) - 2f);
 
-                serverBtn.Add(fav);
-                fav.BringToFront(); // ensure it renders above the row button
+    //            baseWrap.style.width = half; baseWrap.style.flexGrow = 0; baseWrap.style.flexShrink = 0;
+    //            favField.style.width = half; favField.style.flexGrow = 0; favField.style.flexShrink = 0;
 
-                // Stop join when clicking the star
-                fav.RegisterCallback<PointerDownEvent>(e => { e.StopImmediatePropagation(); e.PreventDefault(); });
-                fav.RegisterCallback<PointerUpEvent>(e => { e.StopImmediatePropagation(); e.PreventDefault(); });
-                fav.RegisterCallback<ClickEvent>(e =>
-                {
-                    e.StopImmediatePropagation();
-                    e.PreventDefault();
+    //            // Optional: keep label/toggle nicely spaced
+    //            lbl.style.marginRight = 6;
+    //            tgl.style.marginLeft = 6;
+    //        }
 
-                    if (_favorites.Contains(key)) { _favorites.Remove(key); fav.text = "☆"; }
-                    else { _favorites.Add(key); fav.text = "★"; }
-                }, TrickleDown.NoTrickleDown);
-            }
-
-            // --- ALIGN PLAYERS to header width (right-aligned) ---
-            var playersLabel = serverBtn.Q<Label>("PlayersLabel");
-            if (playersLabel != null && sPlayersColWidth > 0f)
-            {
-                playersLabel.style.width = sPlayersColWidth;
-                playersLabel.style.flexShrink = 0;
-                playersLabel.style.unityTextAlign = TextAnchor.MiddleRight;
-            }
-
-            // NOTE: leave PING alone to avoid hiding/overlapping the star.
-            // If you really want to normalize ping too, subtract a star pad:
-            // var pingLabel = serverBtn.Q<TextElement>("PingLabel");
-            // if (pingLabel != null && sPingColWidth > 0f) {
-            //     var starPad = fav.resolvedStyle.width + 8f;
-            //     pingLabel.style.width = Mathf.Max(0, sPingColWidth - starPad);
-            //     pingLabel.style.flexShrink = 0;
-            //     pingLabel.style.unityTextAlign = TextAnchor.MiddleRight;
-            // }
-        }
-    }
+    //        // Run once after geometry + re-run if the row changes size
+    //        row.RegisterCallback<GeometryChangedEvent>(_ => Split());
+    //        row.schedule.Execute(Split).StartingIn(0);
+    //    }
+    //}
 }

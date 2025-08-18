@@ -47,7 +47,7 @@ namespace PuckAIPractice.Utilities
             var playerObj = UnityEngine.Object.Instantiate(prefab);
             var netObj = playerObj.GetComponent<NetworkObject>();
 
-            ulong fakeClientId = 7777777UL + (ulong)(botIndex);
+            ulong fakeClientId = 7777777UL + (ulong)(team == PlayerTeam.Red ? 1 : 0);
             botIndex++;
             netObj.SpawnWithOwnership(fakeClientId, true);
 
@@ -231,7 +231,6 @@ namespace PuckAIPractice.Utilities
             Player blueBot = null;
             Player redBot = null;
             List<Player> bots = FakePlayerRegistry.All.ToList();
-            List<Player> existingBots = FakePlayerRegistry.AllExisting.ToList();
             foreach (Player b in bots)
             {
                 if (b.Team.Value == PlayerTeam.Blue)
@@ -250,7 +249,6 @@ namespace PuckAIPractice.Utilities
             foreach (Player p in players)
             {
                 //Debug.Log($"Player Count: {players.Count()}");
-                if (existingBots.Contains(p)) continue;
                 if (p.Role.Value == PlayerRole.Goalie && p.IsSpawned && p.PlayerBody != null)
                 {
                     if (p.Team.Value == PlayerTeam.Red)

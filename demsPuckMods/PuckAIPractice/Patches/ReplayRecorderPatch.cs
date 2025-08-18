@@ -14,23 +14,23 @@ namespace PuckAIPractice
     public static class ReplayRecorder_Server_Tick_Postfix
     {
         // Cache a fast delegate to ReplayRecorder.Server_AddReplayEvent(string, object)
-        private static readonly Action<ReplayRecorder, string, object> _addReplayEvent;
+        //private static readonly Action<ReplayRecorder, string, object> _addReplayEvent;
 
-        // Simple payload example; replace with your own serializable type
+        //// Simple payload example; replace with your own serializable type
 
-        static ReplayRecorder_Server_Tick_Postfix()
-        {
-            var mi = AccessTools.Method(
-                typeof(ReplayRecorder),
-                "Server_AddReplayEvent",
-                new[] { typeof(string), typeof(object) });
+        //static ReplayRecorder_Server_Tick_Postfix()
+        //{
+        //    var mi = AccessTools.Method(
+        //        typeof(ReplayRecorder),
+        //        "Server_AddReplayEvent",
+        //        new[] { typeof(string), typeof(object) });
 
-            if (mi != null)
-            {
-                _addReplayEvent =
-                    AccessTools.MethodDelegate<Action<ReplayRecorder, string, object>>(mi);
-            }
-        }
+        //    if (mi != null)
+        //    {
+        //        _addReplayEvent =
+        //            AccessTools.MethodDelegate<Action<ReplayRecorder, string, object>>(mi);
+        //    }
+        //}
 
         // Runs after the original Server_Tick has completed
         static void Postfix(ReplayRecorder __instance)
@@ -81,47 +81,47 @@ namespace PuckAIPractice
             }
         }
     }
-    [HarmonyPatch(typeof(ReplayRecorder), "Server_StartRecording")]
-    public static class ReplayRecorder_Server_StartRecording_Postfix
-    {
-        // Runs after the original Server_Tick has completed
-        static void Postfix(ReplayRecorder __instance)
-        {
-            // If the original early-returned because we're not server, mirror that here
-            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
-                return;
+    //[HarmonyPatch(typeof(ReplayRecorder), "Server_StartRecording")]
+    //public static class ReplayRecorder_Server_StartRecording_Postfix
+    //{
+    //    // Runs after the original Server_Tick has completed
+    //    static void Postfix(ReplayRecorder __instance)
+    //    {
+    //        // If the original early-returned because we're not server, mirror that here
+    //        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+    //            return;
 
-            // Add whatever you need after the recorder did its normal work
-            Debug.Log("Server Start Recording");
-            try
-            {
-                if(FakePlayerRegistry.All.Count() == 0)
-                {
-                    Debug.Log("Detecting Bots Before Recording");
-                    //BotSpawning.DetectOpenGoalAndSpawnBot();
-                }
-                foreach (Player player in FakePlayerRegistry.AllExisting)
-                {
-                    __instance.Server_AddPlayerSpawnedEvent(player);
-                    if (player.PlayerBody)
-                    {
-                        Debug.Log("Goalie Skins");
-                        Debug.Log(player.PlayerBody.Player.JerseyGoalieRedSkin.Value.ToString());
-                        Debug.Log(player.PlayerBody.Player.JerseyGoalieBlueSkin.Value.ToString());
-                        __instance.Server_AddPlayerBodySpawnedEvent(player.PlayerBody);
-                    }
-                    if (player.Stick)
-                    {
-                        __instance.Server_AddStickSpawnedEvent(player.Stick);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[YourMod] Postfix failed: {e}");
-            }
-        }
-    }
+    //        // Add whatever you need after the recorder did its normal work
+    //        Debug.Log("Server Start Recording");
+    //        try
+    //        {
+    //            if (FakePlayerRegistry.All.Count() == 0)
+    //            {
+    //                Debug.Log("Detecting Bots Before Recording");
+    //                //BotSpawning.DetectOpenGoalAndSpawnBot();
+    //            }
+    //            foreach (Player player in FakePlayerRegistry.All)
+    //            {
+    //                __instance.Server_AddPlayerSpawnedEvent(player);
+    //                if (player.PlayerBody)
+    //                {
+    //                    Debug.Log("Goalie Skins");
+    //                    Debug.Log(player.PlayerBody.Player.JerseyGoalieRedSkin.Value.ToString());
+    //                    Debug.Log(player.PlayerBody.Player.JerseyGoalieBlueSkin.Value.ToString());
+    //                    __instance.Server_AddPlayerBodySpawnedEvent(player.PlayerBody);
+    //                }
+    //                if (player.Stick)
+    //                {
+    //                    __instance.Server_AddStickSpawnedEvent(player.Stick);
+    //                }
+    //            }
+    //        }
+    //        catch (Exception e)
+    //        {
+    //            Debug.LogError($"[YourMod] Postfix failed: {e}");
+    //        }
+    //    }
+    //}
     //[HarmonyPatch(typeof(ReplayPlayer), "Server_StopReplay")]
     //static class Event_OnPlayerSpawned_Prefix
     //{
