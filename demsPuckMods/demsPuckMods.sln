@@ -27,6 +27,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerBrowserInGame", "Serv
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerFavorites", "ServerFavorites\ServerFavorites.csproj", "{794F17BD-C221-4BCB-8DC5-ED4D06801A47}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestProject", "TestProject\TestProject.csproj", "{DED0FD02-BA73-4388-823E-5E0B9D0F9537}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -81,6 +83,10 @@ Global
 		{794F17BD-C221-4BCB-8DC5-ED4D06801A47}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{794F17BD-C221-4BCB-8DC5-ED4D06801A47}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{794F17BD-C221-4BCB-8DC5-ED4D06801A47}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DED0FD02-BA73-4388-823E-5E0B9D0F9537}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DED0FD02-BA73-4388-823E-5E0B9D0F9537}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DED0FD02-BA73-4388-823E-5E0B9D0F9537}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DED0FD02-BA73-4388-823E-5E0B9D0F9537}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

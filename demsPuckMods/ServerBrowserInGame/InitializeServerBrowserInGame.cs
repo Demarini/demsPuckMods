@@ -42,7 +42,7 @@ namespace ServerBrowserInGame
             {
                 harmony.UnpatchSelf();
                 PauseMenuServerBrowserInjector.Uninstall();
-                ServerBrowserFavToggleInjector.Uninstall();
+                //ServerBrowserFavToggleInjector.Uninstall();
             }
             catch (Exception e)
             {
