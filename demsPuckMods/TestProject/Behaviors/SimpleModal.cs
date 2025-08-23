@@ -11,6 +11,7 @@ using TestProject.Singletons;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UIElements;
+using static MOTD.Behaviors.SimpleModal;
 
 namespace MOTD.Behaviors
 {
@@ -120,8 +121,6 @@ namespace MOTD.Behaviors
         VisualElement _footLeft, _footCenter, _footRight;
         Toggle _optOutToggle;
         Label _optOutLabel;
-        Button _discordBtn, _actionBtn;
-        Image _discordImg, _actionImg;
         string _optOutKey;                   // current modal’s key (null/empty if none)
         string _pendingOptOutKey;
         VisualElement _overlay, _panel, _body, _footer;
@@ -307,16 +306,16 @@ namespace MOTD.Behaviors
             _footer.Add(_footRight);
 
             // Buttons (images)
-            _discordBtn = MakeImageButton(out _discordImg, 44f, 8f, 0f);
-            _discordBtn.tooltip = "Join our Discord";
-            _discordBtn.style.display = DisplayStyle.None;
-            _discordBtn.style.marginRight = 12;
+            //_discordBtn = MakeImageButton(out _discordImg, 44f, 8f, 0f, 5);
+            //_discordBtn.tooltip = "Join our Discord";
+            //_discordBtn.style.display = DisplayStyle.None;
+            //_discordBtn.style.marginRight = 12;
             
-            _actionBtn = MakeImageButton(out _actionImg, 44f, 8f, 0f);
-            _actionBtn.tooltip = "Open link";
-            _actionBtn.style.display = DisplayStyle.None;
-            SetButtonSize(_discordBtn, 44f); // 44 x 110
-            SetButtonSize(_actionBtn, 44f);  // 44 x 110
+            //_actionBtn = MakeImageButton(out _actionImg, 44f, 8f, 0f, 5);
+            //_actionBtn.tooltip = "Open link";
+            //_actionBtn.style.display = DisplayStyle.None;
+            //SetButtonSize(_discordBtn, 44f); // 44 x 110
+            //SetButtonSize(_actionBtn, 44f);  // 44 x 110
             _closeBtn = new Button(() => Hide()) { text = "CLOSE" };
             _closeBtn.style.height = 44;
             _closeBtn.style.minWidth = 120;
@@ -336,8 +335,8 @@ namespace MOTD.Behaviors
             _closeBtn.style.opacity = 1f;
             if (fontDef.HasValue) _closeBtn.style.unityFontDefinition = fontDef.Value;
             _footRight.Add(_closeBtn);
-            _footLeft.Add(_discordBtn);
-            _footLeft.Add(_actionBtn);
+            //_footLeft.Add(_discordBtn);
+            //_footLeft.Add(_actionBtn);
             
             _footer.Add(_footLeft);
             _footer.Add(_footCenter);
@@ -383,66 +382,102 @@ namespace MOTD.Behaviors
                     .Replace("<BR/>", "\n")
                     .Replace("<BR>", "\n");
         }
-        Button MakeImageButton(out Image img, float height, float cornerRadius, float pad)
+        FooterBtn CreateAndBindFooterButton(ButtonSpec spec)
         {
-            var b = new Button();
-            b.pickingMode = PickingMode.Position;
+            if (spec == null || string.IsNullOrWhiteSpace(spec.url)) return null;
 
-            // Start at your target aspect; you can call SetButtonSize again later
-            var width = height * 2.5f;
-            b.style.height = height;
-            b.style.width = width;
-            b.style.minHeight = height;   // override default USS mins
-            b.style.minWidth = width;
-            b.style.flexShrink = 0;
+            var fb = new FooterBtn();
+            fb.button = MakeImageButton(out fb.image, (spec.height > 0 ? spec.height : 60f),
+                                        (spec.corner > 0 ? spec.corner : 8f), spec.pad, spec.choke, 0f, ThemeMapper.Hex(spec.backgroundColor, Color.clear), ThemeMapper.Hex(spec.backgroundHover, Color.clear), ThemeMapper.Hex(spec.backgroundActive, Color.clear));
+            SetButtonSize(fb.button, (spec.height > 0 ? spec.height : 60f),
+                                        (spec.aspect > 0 ? spec.aspect : 2.5f));
+            fb.button.tooltip = string.IsNullOrWhiteSpace(spec.name) ? "Open link" : spec.name;
+            fb.button.style.marginRight = spec.marginRight;
 
-            // Padding: keep what you pass in (remove the later zeroing)
-            b.style.paddingLeft = pad;
-            b.style.paddingRight = pad;
-            b.style.paddingTop = pad;
-            b.style.paddingBottom = pad;
+            // theme background like other buttons (if you have a StyleButton(theme) helper)
+            StyleButton(fb.button, new Theme()
+            {
+                Button = ThemeMapper.Hex(spec.backgroundColor, Color.clear),
+                ButtonActive = ThemeMapper.Hex(spec.backgroundActive, Color.clear),
+                ButtonHover = ThemeMapper.Hex(spec.backgroundHover, Color.clear)
+            });
 
+            // Click handler
+            fb.handler = () => Application.OpenURL(spec.url);
+            fb.button.clicked += fb.handler;
+
+            // Load icon (optional)
+            fb.button.style.display = DisplayStyle.None;
+            fb.image.image = null;
+
+            if (string.IsNullOrWhiteSpace(spec.iconUrl))
+            {
+                // no icon — just show the empty button (you could add a text label here if you want)
+                fb.button.style.display = DisplayStyle.Flex;
+            }
+            else
+            {
+                StartCoroutine(LoadIntoImage(spec.iconUrl, fb.image, ok =>
+                {
+                    fb.button.style.display = ok ? DisplayStyle.Flex : DisplayStyle.None;
+                }));
+            }
+
+            // Add to the footer (left lane)
+            _footLeft.style.display = DisplayStyle.Flex;
+            _footLeft.Add(fb.button);
+
+            _dynButtons.Add(fb);
+            return fb;
+        }
+        Button MakeImageButton(out Image img, float height, float aspect, float pad, float cornerRadius, float chokePx, Color background, Color backgroundHover, Color backgroundActive)
+        {
+            var b = new Button { pickingMode = PickingMode.Position };
+
+            // Size + rounded clip
+            SetButtonSize(b, height, aspect);
             b.style.borderTopLeftRadius = cornerRadius;
             b.style.borderTopRightRadius = cornerRadius;
             b.style.borderBottomLeftRadius = cornerRadius;
             b.style.borderBottomRightRadius = cornerRadius;
-            b.style.backgroundColor = Color.clear;
+            b.style.overflow = Overflow.Hidden;     // <-- makes rounding clip the child
+            b.style.backgroundColor = background;
             b.style.justifyContent = Justify.Center;
             b.style.alignItems = Align.Center;
 
+            // Image fills the button, but keeps its own aspect
             img = new Image { pickingMode = PickingMode.Ignore };
-            img.scaleMode = ScaleMode.ScaleToFit;       // keep image aspect inside the rect
+            img.scaleMode = ScaleMode.ScaleToFit;                  // <-- no stretching
             img.style.width = Length.Percent(100);
             img.style.height = Length.Percent(100);
+
+            // “Choke” the image slightly so corners look nicely rounded
+            if (chokePx > 0f)
+            {
+                img.style.marginLeft = chokePx;
+                img.style.marginRight = chokePx;
+                img.style.marginTop = chokePx;
+                img.style.marginBottom = chokePx;
+            }
+
             b.Add(img);
 
             // simple hover/press
-            b.RegisterCallback<PointerEnterEvent>(_ => b.style.backgroundColor = new Color(1, 1, 1, 0.10f));
-            b.RegisterCallback<PointerLeaveEvent>(_ => b.style.backgroundColor = new Color(1, 1, 1, 0.06f));
-            b.RegisterCallback<PointerDownEvent>(_ => b.style.backgroundColor = new Color(1, 1, 1, 0.14f));
-            b.RegisterCallback<PointerUpEvent>(_ => b.style.backgroundColor = new Color(1, 1, 1, 0.10f));
+            b.RegisterCallback<PointerEnterEvent>(_ => b.style.backgroundColor = backgroundHover);
+            b.RegisterCallback<PointerLeaveEvent>(_ => b.style.backgroundColor = background);
+            b.RegisterCallback<PointerDownEvent>(_ => b.style.backgroundColor = backgroundActive);
+            b.RegisterCallback<PointerUpEvent>(_ => b.style.backgroundColor = backgroundHover);
 
             return b;
         }
         static void SetButtonSize(VisualElement b, float height, float aspect = 2.5f)
         {
-            var width = height * aspect;
-
-            // Explicit size
-            b.style.height = height;
+            float width = height * aspect;
             b.style.width = width;
-
-            // Kill default USS mins that clamp smaller sizes
-            b.style.minHeight = height;
-            b.style.minWidth = width;
-
-            // Optional: keep it fixed (prevents flex from stretching/shrinking)
-            b.style.maxHeight = height;
-            b.style.maxWidth = width;
-
-            // Don’t let the flex row shrink the button
-            b.style.flexShrink = 0;
-            b.style.flexGrow = 0;
+            b.style.height = height;
+            b.style.minWidth = width; b.style.minHeight = height;
+            b.style.maxWidth = width; b.style.maxHeight = height;
+            b.style.flexGrow = 0; b.style.flexShrink = 0;
         }
         public void RequestShow(string title, string richText, Action<VisualElement> build,
                         string optOutKey = null, string bannerUrl = null, string panelBgUrl = null, float height = 50, float width = 50, ThemeDto theme = null, ModalDoc doc = null)
@@ -542,12 +577,16 @@ namespace MOTD.Behaviors
             }
 
             // Footer image buttons — pre-hide, then bind if doc provided
-            _discordBtn.style.display = DisplayStyle.None;
-            _actionBtn.style.display = DisplayStyle.None;
-            if (doc != null)
+            //_discordBtn.style.display = DisplayStyle.None;
+            //_actionBtn.style.display = DisplayStyle.None;
+            ClearDynamicButtons();
+            _footLeft.style.display = DisplayStyle.None; // will flip to Flex if we add any
+
+            //EnsureButtonsFromLegacy(doc);
+            if (doc?.buttons != null && doc.buttons.Count > 0)
             {
-                BindDiscordButton(doc.discordImageUrl, doc.discordUrl, doc.discordSize);
-                BindActionButton(doc.actionImageUrl, doc.actionUrl, doc.actionSize);
+                foreach (var spec in doc.buttons)
+                    CreateAndBindFooterButton(spec);
             }
 
             // Show
@@ -558,70 +597,84 @@ namespace MOTD.Behaviors
             _overlay.BringToFront();
             _overlay.Focus();
         }
-        void BindDiscordButton(string iconUrl, string clickUrl, float size)
+        readonly List<FooterBtn> _dynButtons = new List<FooterBtn>();
+
+        void ClearDynamicButtons()
         {
-            // Hide if there’s no target link
-            if (string.IsNullOrWhiteSpace(clickUrl))
+            foreach (var fb in _dynButtons)
             {
-                _discordBtn.style.display = DisplayStyle.None;
-                return;
+                if (fb != null && fb.button != null)
+                {
+                    if (fb.handler != null) fb.button.clicked -= fb.handler;
+                    fb.button.RemoveFromHierarchy();
+                }
             }
-
-            // size (optional)
-            if (size > 0f) { _discordBtn.style.width = size; _discordBtn.style.height = size; }
-
-            // reset visual state while loading
-            _discordBtn.style.display = DisplayStyle.None;
-            _discordImg.image = null;
-            _discordImg.tintColor = Color.white;
-
-            // (re)bind click
-            if (_discordHandler != null) _discordBtn.clicked -= _discordHandler;
-            _discordHandler = () => Application.OpenURL(clickUrl);
-            _discordBtn.clicked += _discordHandler;
-
-            if (string.IsNullOrWhiteSpace(iconUrl))
-            {
-                // allow showing without an icon if you want
-                _discordBtn.style.display = DisplayStyle.Flex;
-                return;
-            }
-
-            StartCoroutine(LoadIntoImage(iconUrl, _discordImg, ok =>
-            {
-                _discordBtn.style.display = ok ? DisplayStyle.Flex : DisplayStyle.None;
-            }));
+            _dynButtons.Clear();
         }
+        //void BindDiscordButton(string iconUrl, string clickUrl, float size)
+        //{
+        //    // Hide if there’s no target link
+        //    if (string.IsNullOrWhiteSpace(clickUrl))
+        //    {
+        //        _discordBtn.style.display = DisplayStyle.None;
+        //        return;
+        //    }
 
-        void BindActionButton(string iconUrl, string clickUrl, float size)
-        {
-            if (string.IsNullOrWhiteSpace(clickUrl))
-            {
-                _actionBtn.style.display = DisplayStyle.None;
-                return;
-            }
+        //    // size (optional)
+        //    if (size > 0f) { _discordBtn.style.width = size; _discordBtn.style.height = size; }
 
-            if (size > 0f) { _actionBtn.style.width = size; _actionBtn.style.height = size; }
+        //    // reset visual state while loading
+        //    _discordBtn.style.display = DisplayStyle.None;
+        //    _discordImg.image = null;
+        //    _discordImg.tintColor = Color.white;
 
-            _actionBtn.style.display = DisplayStyle.None;
-            _actionImg.image = null;
-            _actionImg.tintColor = Color.white;
+        //    // (re)bind click
+        //    if (_discordHandler != null) _discordBtn.clicked -= _discordHandler;
+        //    _discordHandler = () => Application.OpenURL(clickUrl);
+        //    _discordBtn.clicked += _discordHandler;
 
-            if (_actionHandler != null) _actionBtn.clicked -= _actionHandler;
-            _actionHandler = () => Application.OpenURL(clickUrl);
-            _actionBtn.clicked += _actionHandler;
+        //    if (string.IsNullOrWhiteSpace(iconUrl))
+        //    {
+        //        // allow showing without an icon if you want
+        //        _discordBtn.style.display = DisplayStyle.Flex;
+        //        return;
+        //    }
 
-            if (string.IsNullOrWhiteSpace(iconUrl))
-            {
-                _actionBtn.style.display = DisplayStyle.Flex;
-                return;
-            }
+        //    StartCoroutine(LoadIntoImage(iconUrl, _discordImg, ok =>
+        //    {
+        //        _discordBtn.style.display = ok ? DisplayStyle.Flex : DisplayStyle.None;
+        //    }));
+        //}
 
-            StartCoroutine(LoadIntoImage(iconUrl, _actionImg, ok =>
-            {
-                _actionBtn.style.display = ok ? DisplayStyle.Flex : DisplayStyle.None;
-            }));
-        }
+        //void BindActionButton(string iconUrl, string clickUrl, float size)
+        //{
+        //    if (string.IsNullOrWhiteSpace(clickUrl))
+        //    {
+        //        _actionBtn.style.display = DisplayStyle.None;
+        //        return;
+        //    }
+
+        //    if (size > 0f) { _actionBtn.style.width = size; _actionBtn.style.height = size; }
+
+        //    _actionBtn.style.display = DisplayStyle.None;
+        //    _actionImg.image = null;
+        //    _actionImg.tintColor = Color.white;
+
+        //    if (_actionHandler != null) _actionBtn.clicked -= _actionHandler;
+        //    _actionHandler = () => Application.OpenURL(clickUrl);
+        //    _actionBtn.clicked += _actionHandler;
+
+        //    if (string.IsNullOrWhiteSpace(iconUrl))
+        //    {
+        //        _actionBtn.style.display = DisplayStyle.Flex;
+        //        return;
+        //    }
+
+        //    StartCoroutine(LoadIntoImage(iconUrl, _actionImg, ok =>
+        //    {
+        //        _actionBtn.style.display = ok ? DisplayStyle.Flex : DisplayStyle.None;
+        //    }));
+        //}
         IEnumerator LoadIntoImage(string url, Image target, Action<bool> done = null)
         {
             if (target == null || string.IsNullOrWhiteSpace(url))
@@ -894,10 +947,10 @@ namespace MOTD.Behaviors
             b.RegisterCallback<PointerDownEvent>(OnBtnDown);
             b.RegisterCallback<PointerUpEvent>(OnBtnUp);
 
-            void OnBtnEnter(PointerEnterEvent _) => b.style.backgroundColor = _theme.ButtonHover;
-            void OnBtnLeave(PointerLeaveEvent _) => b.style.backgroundColor = _theme.Button;
-            void OnBtnDown(PointerDownEvent _) => b.style.backgroundColor = _theme.ButtonActive;
-            void OnBtnUp(PointerUpEvent _) => b.style.backgroundColor = _theme.ButtonHover;
+            void OnBtnEnter(PointerEnterEvent _) => b.style.backgroundColor = t.ButtonHover;
+            void OnBtnLeave(PointerLeaveEvent _) => b.style.backgroundColor = t.Button;
+            void OnBtnDown(PointerDownEvent _) => b.style.backgroundColor = t.ButtonActive;
+            void OnBtnUp(PointerUpEvent _) => b.style.backgroundColor = t.ButtonHover;
         }
         void StyleOptOutToggle()
         {
@@ -918,5 +971,11 @@ namespace MOTD.Behaviors
                 check.style.opacity = StyleKeyword.Null;
             }
         }
+    }
+    sealed class FooterBtn
+    {
+        public Button button;
+        public Image image;
+        public Action handler;
     }
 }

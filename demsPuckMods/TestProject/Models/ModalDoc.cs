@@ -36,5 +36,10 @@ namespace MOTD.Models
         public float aspect = 2.5f;    // width = height * aspect
         public float corner = 8f;      // px border radius
         public float marginRight = 12f;
+        public float pad = 0f;
+        public float choke = 0f;
+        public string backgroundColor;
+        public string backgroundHover;
+        public string backgroundActive;
     }
 }

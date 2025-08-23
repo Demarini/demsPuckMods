@@ -7,8 +7,8 @@
     <ProjectGuid>{DED0FD02-BA73-4388-823E-5E0B9D0F9537}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>TestProject</RootNamespace>
-    <AssemblyName>TestProject</AssemblyName>
+    <RootNamespace>MOTD</RootNamespace>
+    <AssemblyName>MOTD</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
@@ -66,7 +66,7 @@
   </ItemGroup>
   <Target Name="PostBuildMoveDll" AfterTargets="Build">
     <PropertyGroup>
-      <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\TestProject</TargetDir>
+      <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\MOTD</TargetDir>
     </PropertyGroup>
     <MakeDir Directories="$(TargetDir)" />
     <!-- Copy the DLL -->
