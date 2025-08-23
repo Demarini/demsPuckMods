@@ -32,7 +32,7 @@ namespace MOTD.Behaviors
             UnityEngine.Object.DontDestroyOnLoad(_go);
 
             _impl = _go.AddComponent<Impl>();
-            Debug.Log("[SimpleModal] Install -> Impl added");
+            //Debug.Log("[SimpleModal] Install -> Impl added");
         }
 
         public static void Uninstall()
@@ -150,7 +150,7 @@ namespace MOTD.Behaviors
         Action _actionHandler;
         void Awake()
         {
-            Debug.Log("[SimpleModal] Impl.Awake");
+            //Debug.Log("[SimpleModal] Impl.Awake");
             StartCoroutine(Bootstrap());
         }
 
@@ -160,7 +160,7 @@ namespace MOTD.Behaviors
             while (UIManager.Instance == null || UIManager.Instance.RootVisualElement == null)
                 yield return null;
 
-            Debug.Log("[SimpleModal] Bootstrap -> Build()");
+            //Debug.Log("[SimpleModal] Bootstrap -> Build()");
             Build(UIManager.Instance.RootVisualElement);
         }
         static string NormalizePathOrUrl(string s)
@@ -182,7 +182,7 @@ namespace MOTD.Behaviors
         {
             if (_built) return;
 
-            Debug.Log("Entered Build");
+            //Debug.Log("Entered Build");
             // Fullscreen translucent overlay
             _overlay = new VisualElement { name = "YourModModalOverlay" };
             _overlay.style.position = Position.Absolute;

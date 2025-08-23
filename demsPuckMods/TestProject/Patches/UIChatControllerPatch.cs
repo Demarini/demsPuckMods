@@ -11,6 +11,7 @@ using TestProject.Utilities;
 using UnityEngine;
 using MOTD.Singletons;
 using TestProject.Singletons;
+using demsMOTD.MOTD;
 namespace MOTD.Patches
 {
     [HarmonyPatch]
@@ -56,13 +57,20 @@ namespace MOTD.Patches
             new Type[] { typeof(Dictionary<string, object>) })]
         static void Postfix(UIChatController __instance, Dictionary<string, object> message)
         {
+            if (PracticeModeDetector.IsPracticeMode)
+            {
+                return;
+            }
             var uiChat = _uiChatRef(__instance);
             if (uiChat == null) return;
 
             ulong clientId = 0;
             try { clientId = Convert.ToUInt64(message?["clientId"]); } catch { }
-            string test = File.ReadAllText(ConfigData.Instance.JsonFileLocation);
-            uiChat.Server_SendSystemChatMessage(CustomWelcome + test, clientId);
+            if(ConfigData.Instance.JsonFileLocation != "")
+            {
+                string test = File.ReadAllText(ConfigData.Instance.JsonFileLocation);
+                uiChat.Server_SendSystemChatMessage(CustomWelcome + test, clientId);
+            }
         }
         [HarmonyPatch(typeof(UIChat))]
         public static class UIChat_AddChatMessage_MotdPatch
@@ -79,15 +87,15 @@ namespace MOTD.Patches
                 var text = (message ?? string.Empty).Trim();
                 if (!IsMotdCommand(text)) return true; // not MOTD -> allow original
 
-                Debug.Log("Is MOTD Command");
-                Debug.Log(message);
+                //Debug.Log("Is MOTD Command");
+                //Debug.Log(message);
                 string error = "";
                 MOTDSettings doc;
                 
                 ModalDocIO.TryLoad(message, out doc, out error);
                 if (error == null)
                 {
-                    Debug.Log("Showing Simple Modal");
+                    //Debug.Log("Showing Simple Modal");
                     SimpleModal.ApplyTheme(ThemeMapper.ToTheme(doc.Theme, SimpleModal.DarkDefault));
                     SimpleModal.Show(
     title: doc.ModalDoc.title,

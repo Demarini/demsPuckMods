@@ -19,50 +19,45 @@ namespace MOTD.Config
         {
             try
             {
-                var dllDir = GetDllDirectory();
-                Debug.Log($"[MOTD] DLL directory: {dllDir}");
+                string assemblyPath = Assembly.GetExecutingAssembly().Location;
+                Debug.Log($"[MOTD] Mod assembly path: {assemblyPath}");
+                Debug.Log("-----");
+                string steamLibrary = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(assemblyPath), @"..\..\..\.."));
+                string gameDir = Path.Combine(steamLibrary, "common", "Puck");
+                Debug.Log($"[MOTD] Resolved gameDir: {gameDir}");
 
-                ConfigPath = Path.Combine(dllDir, "MOTDConfig.json");
-                Debug.Log($"[MOTD] Using config at: {ConfigPath}");
-
-                // Create a default config next to the DLL if missing
-                if (!File.Exists(ConfigPath))
+                string configDir = Path.Combine(gameDir, "config");
+                if (!Directory.Exists(configDir))
                 {
-                    Debug.Log("[MOTD] No config found next to DLL. Creating default MOTDConfig.json...");
-                    var defaultJson = JsonConvert.SerializeObject(new ConfigData(), Formatting.Indented);
-                    File.WriteAllText(ConfigPath, defaultJson);
+                    Debug.Log("[MOTD] Creating config directory...");
+                    Directory.CreateDirectory(configDir);
                 }
 
-                // From here on, just read ConfigPath whenever you need it
-                // var cfg = JsonConvert.DeserializeObject<ConfigData>(File.ReadAllText(ConfigPath));
+                ConfigPath = Path.Combine(configDir, "MOTDConfig.json");
+                Debug.Log($"[MOTD] Final ConfigPath: {ConfigPath}");
+
+                string defaultConfig = Path.Combine(Path.GetDirectoryName(assemblyPath), "MOTDConfig.json");
+                Debug.Log($"[MOTD] Looking for default config at: {defaultConfig}");
+
+                if (!File.Exists(ConfigPath))
+                {
+                    if (File.Exists(defaultConfig))
+                    {
+                        Debug.Log("[MOTD] Copying default config to game config folder...");
+                        File.Copy(defaultConfig, ConfigPath);
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[MOTD] No default config found, generating new one...");
+                        var defaultJson = JsonConvert.SerializeObject(new ConfigData(), Formatting.Indented);
+                        File.WriteAllText(ConfigPath, defaultJson);
+                    }
+                }
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[MOTD] Initialize failed: {ex}");
+                Debug.LogError($"[MOTD] Error during ModConfig.Initialize: {ex}");
             }
-        }
-
-        private static string GetDllDirectory()
-        {
-            try
-            {
-                var asm = typeof(ModConfig).Assembly;               // any type from your mod
-                var loc = asm.Location;
-                if (!string.IsNullOrEmpty(loc))
-                    return Path.GetDirectoryName(loc);
-
-                // Fallback (Location can be empty on IL2CPP)
-#pragma warning disable SYSLIB0012
-                var codeBase = asm.CodeBase;
-#pragma warning restore SYSLIB0012
-                if (!string.IsNullOrEmpty(codeBase))
-                    return Path.GetDirectoryName(new Uri(codeBase).LocalPath);
-            }
-            catch { /* fall through */ }
-
-            // Last-ditch fallback: game base directory (may not be the plugin folder)
-            var baseDir = AppContext.BaseDirectory ?? AppDomain.CurrentDomain.BaseDirectory;
-            return baseDir?.TrimEnd(Path.DirectorySeparatorChar) ?? Directory.GetCurrentDirectory();
         }
     }
 }

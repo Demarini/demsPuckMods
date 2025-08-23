@@ -18,11 +18,14 @@ namespace MOTD
         static readonly Harmony harmony = new Harmony("GAFURIX.MOTD");
         public bool OnDisable()
         {
-            throw new NotImplementedException();
+            harmony.UnpatchSelf();
+            SimpleModal.Uninstall();
+            return true;
         }
 
         public bool OnEnable()
         {
+
             harmony.PatchAll();
             ModConfig.Initialize();
             ConfigData.Load();

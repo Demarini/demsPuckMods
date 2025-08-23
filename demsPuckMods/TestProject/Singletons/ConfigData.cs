@@ -28,30 +28,30 @@ namespace MOTD.Singletons
         {
             try
             {
-                Debug.Log("[InputControl] Loading config...");
+                Debug.Log("[MOTD] Loading config...");
 
                 if (!File.Exists(ConfigPath))
                 {
-                    Debug.Log($"[InputControl] Config not found at {ConfigPath}, initializing...");
+                    Debug.Log($"[MOTD] Config not found at {ConfigPath}, initializing...");
                     ModConfig.Initialize();
                 }
 
                 string rawJson = File.ReadAllText(ConfigPath);
-                Debug.Log($"[InputControl] Raw config contents: {rawJson}");
+                Debug.Log($"[MOTD] Raw config contents: {rawJson}");
 
                 _instance = JsonConvert.DeserializeObject<ConfigData>(rawJson);
 
                 if (_instance == null)
                 {
-                    Debug.LogWarning("[InputControl] Config deserialized to null, using defaults.");
+                    Debug.LogWarning("[MOTD] Config deserialized to null, using defaults.");
                     _instance = new ConfigData();
                 }
 
-                Debug.Log("[InputControl] Config loaded successfully.");
+                Debug.Log("[MOTD] Config loaded successfully.");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[InputControl] Failed to load config: {ex}");
+                Debug.LogError($"[MOTD] Failed to load config: {ex}");
                 _instance = new ConfigData();
                 Save();
             }
@@ -63,17 +63,17 @@ namespace MOTD.Singletons
             {
                 if (_instance == null)
                 {
-                    Debug.LogWarning("[InputControl] Save called but _instance is null.");
+                    Debug.LogWarning("[MOTD] Save called but _instance is null.");
                     return;
                 }
 
                 string json = JsonConvert.SerializeObject(_instance, Formatting.Indented);
                 File.WriteAllText(ConfigPath, json);
-                Debug.Log($"[InputControl] Saved config to {ConfigPath}.");
+                Debug.Log($"[MOTD] Saved config to {ConfigPath}.");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[InputControl] Failed to save config: {ex}");
+                Debug.LogError($"[MOTD] Failed to save config: {ex}");
             }
         }
         public string JsonFileLocation { get; set; }

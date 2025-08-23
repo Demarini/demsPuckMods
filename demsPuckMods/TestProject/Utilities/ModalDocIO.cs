@@ -27,21 +27,21 @@ namespace TestProject.Utilities
             try
             {
                 var json = message.Replace("!MOTD ", "");
-                Debug.Log(json);
+                //Debug.Log(json);
                 var settings = JsonConvert.DeserializeObject<MOTDSettings>(json);
                 var parsed = settings.ModalDoc;
                 if(parsed == null)
                 {
-                    Debug.Log("Modal Doc is null.");
+                    //Debug.Log("Modal Doc is null.");
                 }
                 if(settings.Theme == null)
                 {
-                    Debug.Log("Theme Is Null");
+                    //Debug.Log("Theme Is Null");
                 }
                 parsed.richText = NormalizeRich(parsed.richText);
-                Debug.Log(parsed.richText);
+                //Debug.Log(parsed.richText);
                 parsed.title = string.IsNullOrWhiteSpace(parsed.title) ? "Message of the Day" : parsed.title;
-                Debug.Log(parsed.title);
+                //Debug.Log(parsed.title);
 
                 doc = settings;
                 return true;

@@ -52,6 +52,7 @@
     <Compile Include="Config\ModConfig.cs" />
     <Compile Include="Models\ModalDoc.cs" />
     <Compile Include="Models\ModalPrefs.cs" />
+    <Compile Include="Patches\PracticeModeDetector.cs" />
     <Compile Include="Patches\UIChatControllerPatch.cs" />
     <Compile Include="Singletons\ConfigData.cs" />
     <Compile Include="MOTDInitialize.cs" />
