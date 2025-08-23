@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace TestProject.Models
+namespace MOTD.Models
 {
     public static class ModalPrefs
     {

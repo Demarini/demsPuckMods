@@ -1,10 +1,12 @@
-﻿using System;
+﻿using MOTD.Models;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using TestProject.Models;
+using TestProject.Singletons;
 using UnityEngine;
 
 namespace TestProject.Utilities
@@ -19,31 +21,29 @@ namespace TestProject.Utilities
             : s.Replace("<br/>", "\n").Replace("<br>", "\n")
                .Replace("<BR/>", "\n").Replace("<BR>", "\n");
 
-        public static bool TryLoad(string path, out ModalDoc doc, out string error)
+        public static bool TryLoad(string message, out MOTDSettings doc, out string error)
         {
             doc = null; error = null;
             try
             {
-                if (string.IsNullOrEmpty(path)) path = DefaultPath;
-                if (!File.Exists(path))
+                var json = message.Replace("!MOTD ", "");
+                Debug.Log(json);
+                var settings = JsonConvert.DeserializeObject<MOTDSettings>(json);
+                var parsed = settings.ModalDoc;
+                if(parsed == null)
                 {
-                    error = $"MOTD file not found: {path}";
-                    return false;
+                    Debug.Log("Modal Doc is null.");
                 }
-
-                var json = File.ReadAllText(path, Encoding.UTF8);
-                var parsed = JsonUtility.FromJson<ModalDoc>(json);
-                if (parsed == null)
+                if(settings.Theme == null)
                 {
-                    error = $"Invalid MOTD JSON at: {path}";
-                    return false;
+                    Debug.Log("Theme Is Null");
                 }
-
                 parsed.richText = NormalizeRich(parsed.richText);
+                Debug.Log(parsed.richText);
                 parsed.title = string.IsNullOrWhiteSpace(parsed.title) ? "Message of the Day" : parsed.title;
-                parsed.dontShowKey = parsed.dontShowKey ?? string.Empty;
+                Debug.Log(parsed.title);
 
-                doc = parsed;
+                doc = settings;
                 return true;
             }
             catch (Exception ex)

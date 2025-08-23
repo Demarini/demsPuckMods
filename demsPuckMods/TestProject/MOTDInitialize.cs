@@ -4,14 +4,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using TestProject.Behaviors;
+using MOTD.Behaviors;
 using UnityEngine.UIElements;
-
-namespace TestProject
+using MOTD.Config;
+using MOTD.Singletons;
+using System.IO;
+using Newtonsoft.Json;
+using TestProject.Singletons;
+namespace MOTD
 {
-    public class TestProjectInitialize : IPuckMod
+    public class MOTDInitialize : IPuckMod
     {
-        static readonly Harmony harmony = new Harmony("GAFURIX.TestProject");
+        static readonly Harmony harmony = new Harmony("GAFURIX.MOTD");
         public bool OnDisable()
         {
             throw new NotImplementedException();
@@ -20,6 +24,8 @@ namespace TestProject
         public bool OnEnable()
         {
             harmony.PatchAll();
+            ModConfig.Initialize();
+            ConfigData.Load();
             SimpleModal.Install();
             return true;
         }

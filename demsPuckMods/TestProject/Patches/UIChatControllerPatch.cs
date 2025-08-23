@@ -5,12 +5,13 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using TestProject.Behaviors;
-using TestProject.Models;
+using MOTD.Behaviors;
+using MOTD.Models;
 using TestProject.Utilities;
 using UnityEngine;
-
-namespace TestProject.Patches
+using MOTD.Singletons;
+using TestProject.Singletons;
+namespace MOTD.Patches
 {
     [HarmonyPatch]
     static class UIChat_WelcomePatch
@@ -60,7 +61,7 @@ namespace TestProject.Patches
 
             ulong clientId = 0;
             try { clientId = Convert.ToUInt64(message?["clientId"]); } catch { }
-            string test = File.ReadAllText(@"C:\Users\Tom\Documents\TestFilesForPuck\MOTD.json");
+            string test = File.ReadAllText(ConfigData.Instance.JsonFileLocation);
             uiChat.Server_SendSystemChatMessage(CustomWelcome + test, clientId);
         }
         [HarmonyPatch(typeof(UIChat))]
@@ -79,16 +80,24 @@ namespace TestProject.Patches
                 if (!IsMotdCommand(text)) return true; // not MOTD -> allow original
 
                 Debug.Log("Is MOTD Command");
+                Debug.Log(message);
                 string error = "";
-                ModalDoc doc;
+                MOTDSettings doc;
+                
                 ModalDocIO.TryLoad(message, out doc, out error);
-                if (error == "")
+                if (error == null)
                 {
+                    Debug.Log("Showing Simple Modal");
+                    SimpleModal.ApplyTheme(ThemeMapper.ToTheme(doc.Theme, SimpleModal.DarkDefault));
                     SimpleModal.Show(
-    title: doc.title,
-    richText: ModalDocIO.MdToUnity(doc.richText),
-    dontShowKey: doc.dontShowKey
+    title: doc.ModalDoc.title,
+    richText: ModalDocIO.MdToUnity(doc.ModalDoc.richText),
+    dontShowKey: "", bannerUrl: doc.ModalDoc.bannerImageUrl, panelBgUrl: doc.ModalDoc.panelImageUrl, height: doc.ModalDoc.panelHeightPercent, width: doc.ModalDoc.panelWidthPercent, theme: doc.Theme, doc: doc.ModalDoc
 );
+                }
+                else
+                {
+                    Debug.Log(error);
                 }
                 return false; // <-- skip original AddChatMessage (do not print "!MOTD")
             }

@@ -27,7 +27,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerBrowserInGame", "Serv
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServerFavorites", "ServerFavorites\ServerFavorites.csproj", "{794F17BD-C221-4BCB-8DC5-ED4D06801A47}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestProject", "TestProject\TestProject.csproj", "{DED0FD02-BA73-4388-823E-5E0B9D0F9537}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MOTD", "TestProject\MOTD.csproj", "{DED0FD02-BA73-4388-823E-5E0B9D0F9537}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
