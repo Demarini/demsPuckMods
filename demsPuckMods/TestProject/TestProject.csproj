@@ -49,12 +49,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Behaviors\SimpleModal.cs" />
+    <Compile Include="Models\ModalDoc.cs" />
+    <Compile Include="Models\ModalPrefs.cs" />
+    <Compile Include="Patches\UIChatControllerPatch.cs" />
     <Compile Include="TestProjectInitialize.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Utilities\ModalDocIO.cs" />
   </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Utilities\" />
-  </ItemGroup>
+  <ItemGroup />
   <Target Name="PostBuildMoveDll" AfterTargets="Build">
     <PropertyGroup>
       <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\TestProject</TargetDir>

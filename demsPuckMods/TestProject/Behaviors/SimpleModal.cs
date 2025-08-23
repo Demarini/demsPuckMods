@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TestProject.Models;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -36,8 +37,24 @@ namespace TestProject.Behaviors
             _go = null; _impl = null;
         }
 
-        public static void Show(string title, string richText = null, Action<VisualElement> build = null)
-            => _impl?.RequestShow(title, richText, build);
+        public static void Show(string title, string richText, string dontShowKey, Action<VisualElement> build = null)
+        {
+            if (!string.IsNullOrEmpty(dontShowKey) && ModalPrefs.GetHide(dontShowKey)) return;
+            _impl?.RequestShow(title, richText, build, dontShowKey);
+        }
+        public static void ShowFromFile(string title, string filePath, string dontShowKey = null)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(dontShowKey) && ModalPrefs.GetHide(dontShowKey)) return;
+                var txt = System.IO.File.ReadAllText(filePath, Encoding.UTF8);
+                _impl?.RequestShow(title, txt, null, dontShowKey);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[SimpleModal] ShowFromFile failed: {ex}");
+            }
+        }
 
         public static void Hide() => _impl?.Hide();
 
@@ -47,6 +64,13 @@ namespace TestProject.Behaviors
     [UnityEngine.Scripting.Preserve]   // helps with IL2CPP stripping
     public sealed class Impl : MonoBehaviour
     {
+        // footer UI
+        VisualElement _footLeft, _footRight;
+        Toggle _optOutToggle;
+        Label _optOutLabel;
+
+        string _optOutKey;                   // current modal’s key (null/empty if none)
+        string _pendingOptOutKey;
         VisualElement _overlay, _panel, _body, _footer;
         Label _title;
         ScrollView _scroll;
@@ -131,7 +155,6 @@ namespace TestProject.Behaviors
             _title.style.marginBottom = 8;
             _title.style.color = Color.white;
             _title.style.opacity = 1f;
-            _title.style.backgroundColor = new Color(1, 0, 0, 0.25f);
             if (fontDef.HasValue) _title.style.unityFontDefinition = fontDef.Value;
             // Body (scrollable)
             _scroll = new ScrollView { name = "YourModModalScroll" };
@@ -143,11 +166,41 @@ namespace TestProject.Behaviors
             ApplyVGap(_body, 6f);
             _scroll.Add(_body);
 
-            // Footer with a single Close button (you can add more later)
             _footer = new VisualElement { name = "YourModModalFooter" };
             _footer.style.flexDirection = FlexDirection.Row;
-            _footer.style.justifyContent = Justify.FlexEnd;
-            ApplyHGap(_footer, 8f);
+            _footer.style.justifyContent = Justify.SpaceBetween;
+
+            // left side: opt-out area (hidden by default)
+            _footLeft = new VisualElement { name = "YourModModalFooterLeft" };
+            _footLeft.style.flexDirection = FlexDirection.Row;
+            ApplyHGap(_footLeft, 8f);
+
+            _optOutToggle = new Toggle { value = false };
+            _optOutLabel = new Label("Don't show again");
+            _optOutLabel.style.color = Color.white;
+            _optOutLabel.style.marginLeft = 8;
+            if (fontDef.HasValue) _optOutLabel.style.unityFontDefinition = fontDef.Value;
+            var box = _optOutToggle.Q(className: "unity-toggle__input")
+       ?? _optOutToggle.Q(className: "unity-base-field__input");
+            if (box != null)
+            {
+                box.style.backgroundColor = new Color(0.38f, 0.38f, 0.40f, 1f); // slightly brighter
+                box.style.borderTopLeftRadius = 3;
+                box.style.borderTopRightRadius = 3;
+                box.style.borderBottomLeftRadius = 3;
+                box.style.borderBottomRightRadius = 3;
+            }
+            _footLeft.Add(_optOutToggle);
+            _footLeft.Add(_optOutLabel);
+            _footLeft.style.display = DisplayStyle.None; // only shown when a key is provided
+
+            // right side: close button (what you already had)
+            _footRight = new VisualElement { name = "YourModModalFooterRight" };
+            _footRight.style.flexDirection = FlexDirection.Row;
+            _footRight.Add(_closeBtn);
+
+            _footer.Add(_footLeft);
+            _footer.Add(_footRight);
 
             _closeBtn = new Button(() => Hide()) { text = "CLOSE" };
             _closeBtn.style.height = 44;
@@ -160,6 +213,11 @@ namespace TestProject.Behaviors
             _closeBtn.style.borderBottomRightRadius = 8;
             _closeBtn.style.backgroundColor = new Color(0.22f, 0.22f, 0.24f, 1f);
             _closeBtn.style.color = Color.white;
+            _closeBtn.style.unityTextAlign = TextAnchor.MiddleCenter; // vertical + horizontal
+            _closeBtn.style.alignItems = Align.Center;            // center any children
+            _closeBtn.style.justifyContent = Justify.Center;          // …
+            _closeBtn.style.paddingTop = 0;
+            _closeBtn.style.paddingBottom = 0;
             _closeBtn.style.opacity = 1f;
             if (fontDef.HasValue) _closeBtn.style.unityFontDefinition = fontDef.Value;
             _overlay.RegisterCallback<MouseDownEvent>(e =>
@@ -188,65 +246,76 @@ namespace TestProject.Behaviors
             _built = true;
             if (_hasPending)
             {
-                DoShow(_pendingTitle, _pendingRich, _pendingBuild);
+                DoShow(_pendingTitle, _pendingRich, _pendingBuild, _pendingOptOutKey);
                 _hasPending = false;
-                _pendingTitle = null; _pendingRich = null; _pendingBuild = null;
+                _pendingTitle = _pendingRich = null; _pendingBuild = null; _pendingOptOutKey = null;
             }
         }
+        static string NormalizeRich(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            return s.Replace("<br/>", "\n")
+                    .Replace("<br>", "\n")
+                    .Replace("<BR/>", "\n")
+                    .Replace("<BR>", "\n");
+        }
 
-        public void RequestShow(string title, string richText, Action<VisualElement> build)
+        public void RequestShow(string title, string richText, Action<VisualElement> build, string optOutKey = null)
         {
             Debug.Log("Request Show");
-            if (_built) DoShow(title, richText, build);
+            if (_built) DoShow(title, richText, build, optOutKey);
             else
             {
                 _pendingTitle = title;
-                _pendingRich = richText;
+                _pendingRich = NormalizeRich(richText);
                 _pendingBuild = build;
+                _pendingOptOutKey = optOutKey;
                 _hasPending = true;
             }
         }
-        void DoShow(string title, string richText, Action<VisualElement> build)
+        void DoShow(string title, string richText, Action<VisualElement> build, string optOutKey)
         {
             if (!_built) return;
 
-            _title.text = title;
+            _optOutKey = optOutKey; // remember for Hide()
 
+            _title.text = title;
             _body.Clear();
+
+            // Add a rich-text block if provided
             if (!string.IsNullOrEmpty(richText))
             {
-                var lbl = new Label { enableRichText = true };
-                lbl.text = richText;
+                var lbl = new Label { enableRichText = true, text = NormalizeRich(richText) };
                 lbl.style.whiteSpace = WhiteSpace.Normal;
                 lbl.style.fontSize = 16;
                 lbl.style.color = Color.white;
                 lbl.style.opacity = 1f;
-                // ALSO set the borrowed font:
-                if (sampleText != null)
-                    lbl.style.unityFontDefinition = sampleText.resolvedStyle.unityFontDefinition;
-
+                if (fontDef.HasValue) lbl.style.unityFontDefinition = fontDef.Value;
                 _body.Add(lbl);
             }
+
+            // Optional custom builder
             build?.Invoke(_body);
 
-            // Re-parent to the current root as LAST child (guaranteed on top)
-            var root = UIManager.Instance?.RootVisualElement;
-            if (root != null)
+            // Show/initialize opt-out UI
+            if (!string.IsNullOrEmpty(_optOutKey))
             {
-                _overlay.RemoveFromHierarchy();
-                root.Add(_overlay);
+                _optOutToggle.value = ModalPrefs.GetHide(_optOutKey);
+                _footLeft.style.display = DisplayStyle.Flex;
+            }
+            else
+            {
+                _footLeft.style.display = DisplayStyle.None;
             }
 
-            // Show
-            _overlay.visible = true;                      // turn the visibility flag ON
-            _overlay.style.display = DisplayStyle.Flex;   // and ensure display is ON
-            _overlay.BringToFront();
-            _overlay.Focus(); // optional: so ESC goes to us
+            // Ensure overlay is top-most
+            var root = UIManager.Instance?.RootVisualElement;
+            if (root != null) { _overlay.RemoveFromHierarchy(); root.Add(_overlay); }
 
-            // (optional) one-time geometry log to confirm it’s on screen
-            _overlay.schedule.Execute(() =>
-                Debug.Log($"[SimpleModal] overlay={_overlay.worldBound} panel={_panel.worldBound} display={_overlay.resolvedStyle.display} visible={_overlay.visible}")
-            ).StartingIn(0);
+            _overlay.style.display = DisplayStyle.Flex;
+            _overlay.visible = true;
+            _overlay.BringToFront();
+            _overlay.Focus();
         }
         public void Show(string title, string richText = null, Action<VisualElement> build = null)
         {
@@ -257,7 +326,7 @@ namespace TestProject.Behaviors
             if (!string.IsNullOrEmpty(richText))
             {
                 var lbl = new Label { enableRichText = true };
-                lbl.text = richText;
+                lbl.text = NormalizeRich(richText);
                 lbl.style.whiteSpace = WhiteSpace.Normal;
                 lbl.style.fontSize = 16;
                 _body.Add(lbl);
@@ -273,6 +342,11 @@ namespace TestProject.Behaviors
         public void Hide()
         {
             if (_overlay == null) return;
+
+            // commit opt-out if this modal had a key
+            if (!string.IsNullOrEmpty(_optOutKey))
+                ModalPrefs.SetHide(_optOutKey, _optOutToggle.value);
+
             _overlay.visible = false;
             _overlay.style.display = DisplayStyle.None;
         }

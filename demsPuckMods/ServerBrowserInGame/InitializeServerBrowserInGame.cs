@@ -1,7 +1,5 @@
 ﻿using HarmonyLib;
 using PuckAIPractice.Utilities;
-using ServerBrowserInGame.Models;
-using ServerBrowserInGame.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
