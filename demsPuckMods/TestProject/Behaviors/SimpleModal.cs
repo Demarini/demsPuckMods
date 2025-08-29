@@ -119,6 +119,7 @@ namespace MOTD.Behaviors
     {
         // footer UI
         VisualElement _footLeft, _footCenter, _footRight;
+        VisualElement _optGroup;
         Toggle _optOutToggle;
         Label _optOutLabel;
         string _optOutKey;                   // current modal’s key (null/empty if none)
@@ -127,6 +128,11 @@ namespace MOTD.Behaviors
         Label _title;
         ScrollView _scroll;
         Button _closeBtn;
+        VisualElement _closeLock;  // dark overlay on the button
+        Label _closeCountdown;     // countdown text
+        Coroutine _closeCoro;
+        bool _closeUnlocked;       // true when user may close
+        bool _blockEsc, _blockOutside; // current modal’s rules while locked
         bool _built;
         TextElement sampleText;
         // pending request in case Show() comes before Build()
@@ -148,6 +154,7 @@ namespace MOTD.Behaviors
         Action _onDiscordClicked, _onActionClicked;
         Action _discordHandler;
         Action _actionHandler;
+        string _closeBtnBaseText = "CLOSE";
         void Awake()
         {
             //Debug.Log("[SimpleModal] Impl.Awake");
@@ -304,19 +311,39 @@ namespace MOTD.Behaviors
             _footer.Add(_footLeft);
             _footer.Add(_footCenter);
             _footer.Add(_footRight);
+            // --- Opt-out group (checkbox + label) ---
+            _optGroup = new VisualElement { name = "YourModModalOptGroup" };
+            _optGroup.style.flexDirection = FlexDirection.Row;
+            _optGroup.style.alignItems = Align.Center;
+            _optGroup.style.marginRight = 30;     // gap before the buttons
 
+            _optOutToggle = new Toggle { value = false };
+            _optOutToggle.style.marginRight = 12;  // gap between box and text
+
+            _optOutLabel = new Label("Don't show again");
+            _optOutLabel.style.color = Color.white;
+            _optOutLabel.style.marginLeft = 2;
+            // clicking the label toggles the checkbox
+            _optOutLabel.RegisterCallback<ClickEvent>(_ => _optOutToggle.value = !_optOutToggle.value);
+            if (fontDef.HasValue) _optOutLabel.style.unityFontDefinition = fontDef.Value;
+            StyleOptOutToggle();
+            _optGroup.Add(_optOutToggle);
+            _optGroup.Add(_optOutLabel);
+            _footLeft.Add(_optGroup);
+            _optGroup.style.display = DisplayStyle.None;
             // Buttons (images)
             //_discordBtn = MakeImageButton(out _discordImg, 44f, 8f, 0f, 5);
             //_discordBtn.tooltip = "Join our Discord";
             //_discordBtn.style.display = DisplayStyle.None;
             //_discordBtn.style.marginRight = 12;
-            
+
             //_actionBtn = MakeImageButton(out _actionImg, 44f, 8f, 0f, 5);
             //_actionBtn.tooltip = "Open link";
             //_actionBtn.style.display = DisplayStyle.None;
             //SetButtonSize(_discordBtn, 44f); // 44 x 110
             //SetButtonSize(_actionBtn, 44f);  // 44 x 110
             _closeBtn = new Button(() => Hide()) { text = "CLOSE" };
+            _closeBtnBaseText = _closeBtn.text;
             _closeBtn.style.height = 44;
             _closeBtn.style.minWidth = 120;
             _closeBtn.style.paddingLeft = 16;
@@ -333,6 +360,27 @@ namespace MOTD.Behaviors
             _closeBtn.style.paddingTop = 0;
             _closeBtn.style.paddingBottom = 0;
             _closeBtn.style.opacity = 1f;
+
+            // after you style _closeBtn
+            _closeLock = new VisualElement { name = "YourMod_CloseCooldown" };
+            _closeLock.style.position = Position.Absolute;
+            _closeLock.style.left = 0; _closeLock.style.right = 0;
+            _closeLock.style.top = 0; _closeLock.style.bottom = 0;
+            _closeLock.style.backgroundColor = new Color(0, 0, 0, 0.45f);
+            _closeLock.style.display = DisplayStyle.None;      // hidden by default
+            _closeLock.pickingMode = PickingMode.Position;     // eat clicks while visible
+            _closeLock.style.alignItems = Align.Center;        // center label
+            _closeLock.style.justifyContent = Justify.Center;
+
+            _closeCountdown = new Label();
+            _closeCountdown.style.color = Color.white;
+            _closeCountdown.style.unityTextAlign = TextAnchor.MiddleCenter;
+            _closeCountdown.style.fontSize = 14;
+            _closeCountdown.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _closeLock.Add(_closeCountdown);
+
+            _closeBtn.Add(_closeLock);
+
             if (fontDef.HasValue) _closeBtn.style.unityFontDefinition = fontDef.Value;
             _footRight.Add(_closeBtn);
             //_footLeft.Add(_discordBtn);
@@ -373,6 +421,60 @@ namespace MOTD.Behaviors
                 _pendingTitle = _pendingRich = _pendingOptOutKey = _pendingPanelBgUrl = null;
                 _pendingBuild = null;
             }
+        }
+        void StartCloseCooldown(int seconds, bool blockEsc, bool blockOutsideClicks)
+        {
+            // Stop any previous sequence
+            if (_closeCoro != null) { StopCoroutine(_closeCoro); _closeCoro = null; }
+
+            _blockEsc = blockEsc;
+            _blockOutside = blockOutsideClicks;
+
+            if (seconds <= 0)
+            {
+                UnlockClose();
+                return;
+            }
+
+            _closeUnlocked = false;
+            _closeBtn.SetEnabled(false);
+            _closeBtn.text = string.Empty;
+            _closeLock.style.display = DisplayStyle.Flex;  // show dim overlay
+            _closeCountdown.text = $"CLOSE ({seconds})";
+            _closeBtn.tooltip = $"Available in {seconds}s";
+            _closeCoro = StartCoroutine(CloseCooldownRoutine(seconds));
+        }
+
+        IEnumerator CloseCooldownRoutine(int seconds)
+        {
+            float end = Time.unscaledTime + seconds;
+            int lastShown = -1;
+            while (true)
+            {
+                float remaining = end - Time.unscaledTime;
+                if (remaining <= 0f) break;
+
+                int whole = Mathf.CeilToInt(remaining);
+                if (whole != lastShown)
+                {
+                    _closeCountdown.text = $"CLOSE ({whole})";
+                    _closeBtn.tooltip = $"Available in {whole}s";
+                    lastShown = whole;
+                }
+                yield return null; // smooth per-frame tick
+            }
+            UnlockClose();
+        }
+
+        void UnlockClose()
+        {
+            _closeUnlocked = true;
+            _closeBtn.SetEnabled(true);
+            _closeLock.style.display = DisplayStyle.None;
+            _closeCountdown.text = "CLOSE";
+            _closeBtn.text = _closeBtnBaseText ?? "CLOSE";
+            _closeBtn.tooltip = "Close";
+            _closeCoro = null;
         }
         static string NormalizeRich(string s)
         {
@@ -422,7 +524,15 @@ namespace MOTD.Behaviors
                     fb.button.style.display = ok ? DisplayStyle.Flex : DisplayStyle.None;
                 }));
             }
+            _optOutKey = "test";
 
+            // show/hide opt-out row
+            bool hasOpt = !string.IsNullOrEmpty(_optOutKey);
+            _optGroup.style.display = hasOpt ? DisplayStyle.Flex : DisplayStyle.None;
+            if (hasOpt)
+            {
+                _optOutToggle.value = ModalPrefs.GetHide(_optOutKey); // load persisted state
+            }
             // Add to the footer (left lane)
             _footLeft.style.display = DisplayStyle.Flex;
             _footLeft.Add(fb.button);
@@ -582,7 +692,8 @@ namespace MOTD.Behaviors
             ClearDynamicButtons();
             _footLeft.style.display = DisplayStyle.None; // will flip to Flex if we add any
 
-            //EnsureButtonsFromLegacy(doc);
+            //EnsureButtonsFromLegacy(doc);'
+            //_footLeft.Add(_optOutToggle);
             if (doc?.buttons != null && doc.buttons.Count > 0)
             {
                 foreach (var spec in doc.buttons)
@@ -590,6 +701,10 @@ namespace MOTD.Behaviors
             }
 
             // Show
+            int delay = doc?.closeDelaySeconds ?? 0;
+            bool blockEsc = doc?.blockEscDuringDelay ?? true;
+            bool blockOutside = doc?.blockClickOutsideDuringDelay ?? true;
+            StartCloseCooldown(delay, blockEsc, blockOutside);
             var root = UIManager.Instance?.RootVisualElement;
             if (root != null) { _overlay.RemoveFromHierarchy(); root.Add(_overlay); }
             _overlay.style.display = DisplayStyle.Flex;

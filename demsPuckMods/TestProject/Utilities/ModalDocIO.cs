@@ -40,7 +40,7 @@ namespace TestProject.Utilities
                 }
                 parsed.richText = NormalizeRich(parsed.richText);
                 //Debug.Log(parsed.richText);
-                parsed.title = string.IsNullOrWhiteSpace(parsed.title) ? "Message of the Day" : parsed.title;
+                parsed.title = string.IsNullOrWhiteSpace(parsed.title) ? "" : parsed.title;
                 //Debug.Log(parsed.title);
 
                 doc = settings;

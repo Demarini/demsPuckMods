@@ -25,6 +25,10 @@ namespace MOTD.Models
         public string actionImageUrl;
         public float actionSize = 52f;
 
+        public int closeDelaySeconds = 0;              // 0 = no delay
+        public bool blockEscDuringDelay = true;        // prevent ESC until timer ends
+        public bool blockClickOutsideDuringDelay = true; // prevent click-to-close outside panel
+
         public List<ButtonSpec> buttons { get; set; }
     }
     public sealed class ButtonSpec

@@ -1,9 +1,13 @@
 ﻿using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 using UnityEngine;
-using MOTD.Config;
-
-namespace MOTD.Singletons
+using BanIdiots.Config;
+namespace BanIdiots
 {
     public class ConfigData
     {
@@ -78,6 +82,7 @@ namespace MOTD.Singletons
             }
         }
 
-        public string JsonFileLocation { get; set; }
+        public string bannedWordsTextLocation { get; set; }
+        public string logOutputLocation { get; set; }
     }
 }

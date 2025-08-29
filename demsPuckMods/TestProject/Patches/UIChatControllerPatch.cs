@@ -23,7 +23,7 @@ namespace MOTD.Patches
 
         // ---- knobs you can change at runtime if you want
         public static bool ReplaceWelcome = true;  // true = replace original; false = let original run
-        public static string CustomWelcome =
+        public static string MOTDCommand =
             "!MOTD ";
 
         // Prefix: run before original
@@ -59,17 +59,31 @@ namespace MOTD.Patches
         {
             if (PracticeModeDetector.IsPracticeMode)
             {
-                return;
+                //return;
             }
+            ConfigData.Load();
             var uiChat = _uiChatRef(__instance);
             if (uiChat == null) return;
 
             ulong clientId = 0;
             try { clientId = Convert.ToUInt64(message?["clientId"]); } catch { }
-            if(ConfigData.Instance.JsonFileLocation != "")
+            if (ConfigData.Instance.JsonFileLocation != "")
             {
-                string test = File.ReadAllText(ConfigData.Instance.JsonFileLocation);
-                uiChat.Server_SendSystemChatMessage(CustomWelcome + test, clientId);
+                string json = File.ReadAllText(ConfigData.Instance.JsonFileLocation);
+                string error = "";
+                MOTDSettings doc;
+                ModalDocIO.TryLoad(json, out doc, out error);
+                if(error == null && doc != null)
+                {
+                    Debug.Log("Sending MOTD Message");
+                    Debug.Log(json);
+                    uiChat.Server_SendSystemChatMessage(MOTDCommand + json, clientId);
+                }
+                else
+                {
+                    Debug.Log(error);
+                    Debug.Log(doc);
+                }
             }
         }
         [HarmonyPatch(typeof(UIChat))]
