@@ -24,6 +24,99 @@ namespace PuckAIPractice.Utilities
         static bool blueGoalieSpawned;
         static bool redGoalieSpawned;
         static int botIndex = 0;
+        public static void SpawnChaser(PlayerTeam team, PlayerRole role)
+        {
+            if (!PracticeModeDetector.IsPracticeMode && !NetworkManager.Singleton.IsServer)
+            {
+                return;
+            }
+            var playerManager = PlayerManager.Instance;
+            if (playerManager == null)
+            {
+                //Debug.LogError("[FAKE_SPAWN] PlayerManager.Instance was null!");
+                return;
+            }
+
+            var prefab = Traverse.Create(playerManager).Field("playerPrefab").GetValue<Player>();
+            if (prefab == null)
+            {
+                //Debug.LogError("[FAKE_SPAWN] Could not access playerPrefab from PlayerManager!");
+                return;
+            }
+            //Debug.Log("Got player instance?");
+            var playerObj = UnityEngine.Object.Instantiate(prefab);
+            var netObj = playerObj.GetComponent<NetworkObject>();
+
+            ulong fakeClientId = 7777777UL + (ulong)(team == PlayerTeam.Red ? 1 : 0);
+            botIndex++;
+            netObj.SpawnWithOwnership(fakeClientId, true);
+
+            var player = playerObj.GetComponent<Player>();
+            player.Username.Value = $"demBot_Chaser";
+            player.Team.Value = team;
+            player.Number.Value = 7;
+            player.Role.Value = role;
+            string randomJersey = RandomSkins.GetRandomJersey();
+            string randomStick = RandomSkins.GetRandomStickSkin(role);
+            string randomShaftTape = RandomSkins.GetRandomShaftTape(role);
+            string randomBladeTape = RandomSkins.GetRandomBladeTape(role);
+            string randomMustache = RandomSkins.GetRandomMustache();
+            string randomBeard = RandomSkins.GetRandomBeard();
+            string flag = RandomSkins.GetRandomCountry();
+            string visor = RandomSkins.GetRandomVisor();
+            player.JerseyGoalieRedSkin.Value = new FixedString32Bytes(randomJersey);
+            player.JerseyGoalieBlueSkin.Value = new FixedString32Bytes(randomJersey);
+            player.StickGoalieRedSkin.Value = new FixedString32Bytes(randomStick);
+            player.StickGoalieBlueSkin.Value = new FixedString32Bytes(randomStick);
+            player.StickBladeGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
+            player.StickBladeGoalieRedTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
+            player.StickShaftGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
+            player.StickShaftGoalieRedTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
+            player.Mustache.Value = new FixedString32Bytes(randomMustache);
+            player.Beard.Value = new FixedString32Bytes(randomBeard);
+            player.Country.Value = new FixedString32Bytes(flag);
+            player.VisorAttackerBlueSkin.Value = new FixedString32Bytes(visor);
+            player.VisorAttackerRedSkin.Value = new FixedString32Bytes(visor);
+            player.VisorGoalieBlueSkin.Value = new FixedString32Bytes(visor);
+            player.VisorGoalieRedSkin.Value = new FixedString32Bytes(visor);
+            var position = GetNextUnclaimedPosition(player.Team.Value, player.Role.Value);
+            position.Server_Claim(player);
+            //playerObj.Server_RespawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), PlayerRole.Goalie);
+            //position.Server_Claim(player);
+            // Nudge goalie back toward the goal slightly to reduce open angles
+            var body = player.PlayerBody;
+            var mesh = body.PlayerMesh;
+            var stickMesh = body.Stick.StickMesh;
+            //Debug.Log("Player Jersey - " + player.GetPlayerJerseySkin().Value.ToString());
+            mesh.SetJersey(player.Team.Value, randomJersey);
+            mesh.SetNumber(player.Number.Value.ToString());
+            mesh.SetUsername(player.Username.Value.ToString());
+            mesh.SetRole(player.Role.Value);
+            mesh.PlayerHead.SetMustache(RandomSkins.GetRandomMustache());
+            mesh.PlayerHead.SetHelmetFlag(RandomSkins.GetRandomCountry());
+            mesh.PlayerHead.SetHelmetVisor(RandomSkins.GetRandomVisor());
+            mesh.PlayerHead.SetBeard(RandomSkins.GetRandomBeard());
+            stickMesh.SetBladeTape(RandomSkins.GetRandomBladeTape(player.Role.Value));
+            stickMesh.SetSkin(player.Team.Value, RandomSkins.GetRandomStickSkin(player.Role.Value));
+            stickMesh.SetShaftTape(RandomSkins.GetRandomShaftTape(player.Role.Value));
+            //var ai = player.NetworkObject.gameObject.AddComponent<GoalieAI>();
+            //ai.controlledPlayer = player;
+            //ai.team = player.Team.Value;
+            //ai.puckTransform = NetworkBehaviourSingleton<PuckManager>
+            //    .Instance.GetPlayerPuck(NetworkBehaviourSingleton<PuckManager>.Instance.OwnerClientId)
+            //    ?.transform;
+            //ai.puckTransform = FindObjectOfType<Puck>()?.transform;
+            //player.PlayerBody.Rigidbody.isKinematic = true;
+            //player.PlayerInput.Client_SlideInputRpc(true);
+            FakePlayerRegistry.Register(player);
+            //Goalies.GoaliesAreRunning = true;
+            //NetworkBehaviourSingleton<UIScoreboard>.Instance.RemovePlayer(player);
+            //NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(player);
+            //Debug.Log($"Player Count: {PlayerManager.Instance.GetPlayers(false).Count}");
+            //UIScoreboard.Instance.UpdateServer(NetworkBehaviourSingleton<ServerManager>.Instance.Server, PlayerManager.Instance.GetPlayers(false).Count);
+            //DetectPositions.UpdateLabel(player);
+            //Debug.Log($"[FAKE_SPAWN] Spawned {player.Username.Value} as {player.Role.Value} on {player.Team.Value}");
+        }
         public static void SpawnFakePlayer(int index, PlayerRole role, PlayerTeam team)
         {
             if (!PracticeModeDetector.IsPracticeMode && !NetworkManager.Singleton.IsServer)

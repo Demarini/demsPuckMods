@@ -36,7 +36,11 @@ namespace PuckAIPractice.Patches
             Player playerByClientId = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayerByClientId(clientId);
             VoteChatCommandHelper.VotesNeeded = Mathf.RoundToInt((float)NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayers(false).Count / 2f + 0.5f);
 
-            if (command == "/goalies" && parsedCommand.Count() == 1)
+            if(command == "/chaser" && parsedCommand.Count() == 0)
+            {
+                BotSpawning.SpawnChaser(PlayerTeam.Blue, PlayerRole.Attacker);
+            }
+            else if (command == "/goalies" && parsedCommand.Count() == 1)
             {
                 VoteManager voteManager = (VoteManager)Traverse.Create(__instance).Field("voteManager").GetValue();
                 var vm = Traverse.Create(voteManager);

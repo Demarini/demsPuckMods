@@ -4,11 +4,11 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{DED0FD02-BA73-4388-823E-5E0B9D0F9537}</ProjectGuid>
+    <ProjectGuid>{7E9B04C4-66FB-4930-8477-11F9A8D32FC0}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>SceneryModifications</RootNamespace>
-    <AssemblyName>SceneryModifications</AssemblyName>
+    <RootNamespace>SceneryChanger</RootNamespace>
+    <AssemblyName>SceneryChanger</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
@@ -41,40 +41,55 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Behaviors\CoroutineRunner.cs" />
+    <Compile Include="Config\ModConfig.cs" />
+    <Compile Include="Initialization.cs" />
+    <Compile Include="Model\AssetInformation.cs" />
+    <Compile Include="Model\BundleResolveResult.cs" />
+    <Compile Include="Model\SceneInformation.cs" />
+    <Compile Include="Patches\SpectatorManagerPatch.cs" />
+    <Compile Include="Patches\UIChatControllerPatch.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\AbxCacheDecryptor.cs" />
+    <Compile Include="Services\AbxLoader.cs" />
+    <Compile Include="Services\AudioTweaks.cs" />
+    <Compile Include="Services\BundleLoader.cs" />
+    <Compile Include="Services\BundleResolver.cs" />
+    <Compile Include="Services\KeyParser.cs" />
+    <Compile Include="Services\LightingNullifier.cs" />
+    <Compile Include="Services\MessageObfuscation.cs" />
+    <Compile Include="Services\ReflectionKiller.cs" />
+    <Compile Include="Services\ReflectionProbeKiller.cs" />
+    <Compile Include="Services\RemoveArena.cs" />
+    <Compile Include="Services\RinkSceneLoader.cs" />
+    <Compile Include="Services\SceneDumper.cs" />
+    <Compile Include="Behaviors\RinkOnlyPruner.cs" />
+    <Compile Include="Services\SkyboxLoader.cs" />
+    <Compile Include="Singletons\ConfigData.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <ItemGroup>
     <!-- Reference every DLL in libs/, but don’t include them as project items -->
     <Reference Include="..\libs\*.dll" Exclude="..\libs\System.*.dll">
       <HintPath>%(FullPath)</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
+  <ItemGroup />
   <ItemGroup>
-    <Compile Include="Behaviors\SimpleModal.cs" />
-    <Compile Include="Config\ModConfig.cs" />
-    <Compile Include="Models\ModalDoc.cs" />
-    <Compile Include="Models\ModalPrefs.cs" />
-    <Compile Include="Patches\PracticeModeDetector.cs" />
-    <Compile Include="Patches\UIChatControllerPatch.cs" />
-    <Compile Include="Singletons\ConfigData.cs" />
-    <Compile Include="MOTDInitialize.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Singletons\MOTDSettings.cs" />
-    <Compile Include="Utilities\ModalDocIO.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="MOTDConfig.json">
+    <Content Include="SceneryLoaderConfig.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <Target Name="PostBuildMoveDll" AfterTargets="Build">
     <PropertyGroup>
-      <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\MOTD</TargetDir>
+      <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\SceneryLoader</TargetDir>
     </PropertyGroup>
     <MakeDir Directories="$(TargetDir)" />
     <!-- Copy the DLL -->
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFolder="$(TargetDir)" OverwriteReadOnlyFiles="true" />
     <!-- Copy the config JSON -->
-    <Copy SourceFiles="$(OutputPath)MOTDConfig.json" DestinationFolder="$(TargetDir)" OverwriteReadOnlyFiles="true" />
+    <Copy SourceFiles="$(OutputPath)SceneryLoaderConfig.json" DestinationFolder="$(TargetDir)" OverwriteReadOnlyFiles="true" />
     <Message Importance="high" Text="Copied $(AssemblyName).dll to $(TargetDir)" />
   </Target>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

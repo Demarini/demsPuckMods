@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MOTD", "TestProject\MOTD.cs
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BanIdiots", "BanIdiots\BanIdiots.csproj", "{7C230CCF-8564-44CD-A208-6B2A1605521D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SceneryLoader", "SceneryChanger\SceneryLoader.csproj", "{7E9B04C4-66FB-4930-8477-11F9A8D32FC0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -93,6 +95,10 @@ Global
 		{7C230CCF-8564-44CD-A208-6B2A1605521D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7C230CCF-8564-44CD-A208-6B2A1605521D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7C230CCF-8564-44CD-A208-6B2A1605521D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E9B04C4-66FB-4930-8477-11F9A8D32FC0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E9B04C4-66FB-4930-8477-11F9A8D32FC0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E9B04C4-66FB-4930-8477-11F9A8D32FC0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E9B04C4-66FB-4930-8477-11F9A8D32FC0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

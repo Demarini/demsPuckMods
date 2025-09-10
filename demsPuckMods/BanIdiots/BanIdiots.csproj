@@ -42,6 +42,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BanIdiotsInitialize.cs" />
+    <Compile Include="Patches\ArenaSwapper.cs" />
+    <Compile Include="Patches\BundleLoader.cs" />
+    <Compile Include="Patches\LightingNullifier.cs" />
+    <Compile Include="Patches\ReflectionKiller.cs" />
+    <Compile Include="Patches\ReflectionProbeKiller.cs" />
+    <Compile Include="Patches\SceneDumper.cs" />
+    <Compile Include="Patches\SceneManagerPatch.cs" />
+    <Compile Include="Patches\SkyboxLoader.cs" />
     <Compile Include="Singletons\ConfigData.cs" />
     <Compile Include="Config\ModConfig.cs" />
     <Compile Include="Patches\UIChatPatch.cs" />
