@@ -125,7 +125,7 @@ namespace SceneryChanger.Patches
                 // optional: store it globally
                 sceneInformation = si;
 
-                if(RinkOnlyPruner.SceneIsLoaded /* no sync checks here */)
+                if(RinkOnlyPruner.SceneIsLoaded && !PracticeModeDetector.IsPracticeMode)
 {
                     UnityEngine.Debug.Log("[SceneLoader] LoadMap directive received; swapping scene.");
                     RinkSceneLoader.LoadSceneAsync(RinkOnlyPruner.scene, si);

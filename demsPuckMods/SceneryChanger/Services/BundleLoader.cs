@@ -57,7 +57,7 @@ namespace SceneryLoader.Services
 
             // --------- now we yield; do NOT hold locks beyond here ----------
             // unload Unity’s global instance (+ deps) before loading
-            //yield return ForceUnloadUnityBundle(bundleName.ToLowerInvariant(), Path.GetDirectoryName(resolved.BundlePath));
+            yield return ForceUnloadUnityBundle(bundleName.ToLowerInvariant(), Path.GetDirectoryName(resolved.BundlePath));
 
             AssetBundle ab = null;
 
@@ -71,20 +71,22 @@ namespace SceneryLoader.Services
             {
                 Debug.Log($"[BundleLoader] ENC -> {resolved.BundlePath} (v={version})");
                 // Prefer RAM to avoid file races
-                var bytesTask = AbxCacheDecryptor.DecryptAbxToBytesOffThread(resolved.BundlePath, key32);
-                while (!bytesTask.IsCompleted) yield return null;
-                if (bytesTask.IsFaulted)
-                {
-                    Fail(cacheKey, $"Decrypt failed: {bytesTask.Exception.GetBaseException().Message}");
-                    yield break;
-                }
+                var cacheTask = AbxCacheDecryptor.EnsureDecryptedBundleAsync(resolved.BundlePath, key32);
+                while (!cacheTask.IsCompleted) yield return null;
+                if (cacheTask.IsFaulted) { Fail(cacheKey, $"Decrypt failed: {cacheTask.Exception.GetBaseException().Message}"); yield break; }
+                var cacheUnity3D = cacheTask.Result;
 
                 // final safety unload (deps too), then load from RAM
-                //yield return ForceUnloadUnityBundle(bundleName.ToLowerInvariant(), Path.GetDirectoryName(resolved.BundlePath));
+                yield return ForceUnloadUnityBundle(bundleName.ToLowerInvariant(), Path.GetDirectoryName(resolved.BundlePath));
 
-                var req = AssetBundle.LoadFromMemoryAsync(bytesTask.Result);
+                var req = AssetBundle.LoadFromFileAsync(cacheUnity3D);
                 yield return req;
                 ab = req.assetBundle;
+                if (!ab) { Fail(cacheKey, $"Failed ENC load '{cacheUnity3D}'"); yield break; }
+
+                _bundles[cacheKey] = ab;
+                // also remember the cacheUnity3D path in a side map so you can delete it on Unload
+                CompleteInflight(cacheKey, ab);
             }
 
             if (ab == null)

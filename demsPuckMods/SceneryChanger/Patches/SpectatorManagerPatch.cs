@@ -59,7 +59,7 @@ namespace SceneryChanger.Patches
 
                 foreach (Transform child in spectatorLocations.transform)
                 {
-                    Debug.Log("Adding spectator");
+                    //Debug.Log("Adding spectator");
                     // remove optional plane
                     var plane = child.Find("Plane");
                     if (plane != null)

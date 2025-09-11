@@ -42,6 +42,20 @@ namespace SceneryChanger.Services
             GameObject stagedRoot = null;
             bool got = false;
             RinkOnlyPruner.RemoveHangar();
+            string dllDir = Path.GetDirectoryName(typeof(BundleLoader).Assembly.Location);
+            bool enc = !string.IsNullOrWhiteSpace(si.contentKey64);
+            var resolved = BundleResolver.Resolve(si.bundleName, dllDir, preferEncrypted: enc);
+            var info = resolved != null ? resolved.Info : null;
+            if (info != null)
+            {
+                if (info.useGlass) RemoveArena.ShowGlass();
+                else RemoveArena.HideGlass();
+            }
+            else
+            {
+                // default if no file present
+                RemoveArena.ShowGlass();
+            }
             yield return BundleLoader.InstantiatePrefabAsync(si.bundleName, si.prefabName, si.contentKey64, go =>
             {
                 stagedRoot = go; got = true;
