@@ -25,5 +25,23 @@ namespace SceneryChanger.Services
             foreach (var c in ambient.GetComponents<Behaviour>())
                 if (c.GetType().Name.Contains("SynchronizedAudio")) c.enabled = false;
         }
+        public static void TryDisableAmbientAudio()
+        {
+            var level = GameObject.Find("Level");
+            if (!level) return;
+
+            // Preferred exact path
+            var t = level.transform.Find("Sounds/Ambient Crowd");
+            if (t != null)
+            {
+                t.gameObject.SetActive(false);
+                return;
+            }
+
+            // Fallback: name lookup inside Level (in case the hierarchy shifts slightly)
+            var maybe = GameObject.Find("Ambient Crowd");
+            if (maybe != null && maybe.transform.IsChildOf(level.transform))
+                maybe.SetActive(false);
+        }
     }
 }

@@ -68,7 +68,7 @@ namespace SceneryChanger.Patches
             ulong clientId = 0;
             try { clientId = Convert.ToUInt64(message?["clientId"]); } catch { }
             UnityEngine.Debug.Log(ConfigData.Instance.sceneInformation);
-            //ConfigData.Load();
+            ConfigData.Load();
             uiChat.Server_SendSystemChatMessage("!LoadMap " + MessageObfuscation.Encode(JsonConvert.SerializeObject(ConfigData.Instance.sceneInformation)), clientId);
         }
         [HarmonyPatch(typeof(UIChat))]
@@ -125,10 +125,10 @@ namespace SceneryChanger.Patches
                 // optional: store it globally
                 sceneInformation = si;
 
-                if(RinkOnlyPruner.SceneIsLoaded && !PracticeModeDetector.IsPracticeMode)
+                if(!PracticeModeDetector.IsPracticeMode)
 {
                     UnityEngine.Debug.Log("[SceneLoader] LoadMap directive received; swapping scene.");
-                    RinkSceneLoader.LoadSceneAsync(RinkOnlyPruner.scene, si);
+                    SceneLoadCoordinator.OnServerSceneDirective(si);
                     return false; // swallow chat
                 }
 

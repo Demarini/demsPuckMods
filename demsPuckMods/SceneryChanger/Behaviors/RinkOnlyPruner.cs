@@ -154,21 +154,9 @@ namespace SceneryLoader.Behaviors
 
             if (scene.name.Equals("level_1", StringComparison.OrdinalIgnoreCase))
             {
-                SceneIsLoaded = true;
-                RinkOnlyPruner.scene = scene;
-
-                // Prefer server directive if present, else local config
-                var si = UIChatControllerPatch.sceneInformation ?? (ConfigData.Instance.sceneInformation.useSceneLocally ? ConfigData.Instance.sceneInformation : null);
-
-                // 🔑 Just fire the async loader. Don’t pre-check synchronously.
-                if(si != null)
-                {
-                    RinkSceneLoader.LoadSceneAsync(scene, si);
-                }
-                else
-                {
-
-                }
+                //SceneDumper.DumpActiveSceneHierarchy(scene);
+                ConfigData.Load();
+                SceneLoadCoordinator.OnSceneLoaded(scene, PracticeModeDetector.IsPracticeMode, ConfigData.Instance.sceneInformation);
             }
             else
             {
@@ -241,10 +229,11 @@ namespace SceneryLoader.Behaviors
             {
                 if (light.enabled)
                 {
-              //      Debug.Log($"[LightKiller] Disabling light {light.name} on {light.transform.parent?.name}");
-              //      Debug.Log($"[LightKiller] {light.transform} " +
-              //$"type={light.type}, intensity={light.intensity}, range={light.range}, shadows={light.shadows}");
+                    //      Debug.Log($"[LightKiller] Disabling light {light.name} on {light.transform.parent?.name}");
+                    //      Debug.Log($"[LightKiller] {light.transform} " +
+                    //$"type={light.type}, intensity={light.intensity}, range={light.range}, shadows={light.shadows}");
                     //light.enabled = false;
+                    light.intensity = light.intensity;
                 }
             }
         }
@@ -288,7 +277,7 @@ namespace SceneryLoader.Behaviors
         //            //light.enabled = false;
         //        }
         //    }
-        //    //SceneDumper.DumpActiveSceneHierarchy(scene);
+        //    
         //}
         void OnActiveSceneChanged(SM.Scene from, SM.Scene to)
         {

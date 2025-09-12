@@ -56,6 +56,7 @@ namespace SceneryChanger.Services
                 // default if no file present
                 RemoveArena.ShowGlass();
             }
+            AudioTweaks.TryDisableAmbientAudio();
             yield return BundleLoader.InstantiatePrefabAsync(si.bundleName, si.prefabName, si.contentKey64, go =>
             {
                 stagedRoot = go; got = true;
@@ -107,7 +108,7 @@ namespace SceneryChanger.Services
 
             // --- Spectators: wait for locations then spawn (guarded by token) ---
             yield return SpawnSpectatorsWhenLocationsReady(token, 8f);
-
+            
             // Optional cleanup of stray legacy objects AFTER swap
             //ClearLegacyOutsideContainer(); // see helper below (non-blocking)
         }

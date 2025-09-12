@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using SceneryLoader.Singletons;
 using SceneryLoader.Config;
 using UnityEngine;
+using SceneryChanger.Behaviors;
 namespace SceneryChanger
 {
     public class Initialization : IPuckMod
@@ -17,6 +18,7 @@ namespace SceneryChanger
         {
             harmony.UnpatchSelf();
             RinkOnlyPruner.Uninstall();
+            //DisableAmbientCrowd.Uninstall();
             return true;
         }
 
@@ -26,6 +28,7 @@ namespace SceneryChanger
             ModConfig.Initialize();
             ConfigData.Load();
             RinkOnlyPruner.Install();
+            //DisableAmbientCrowd.Install();
             Application.backgroundLoadingPriority = ThreadPriority.BelowNormal;
             // Larger buffer and more time slice = smoother uploads, fewer stalls
             QualitySettings.asyncUploadBufferSize = 64;   // MB

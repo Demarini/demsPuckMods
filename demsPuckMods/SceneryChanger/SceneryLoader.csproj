@@ -42,11 +42,13 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Behaviors\CoroutineRunner.cs" />
+    <Compile Include="Behaviors\MuteAmbience.cs" />
     <Compile Include="Config\ModConfig.cs" />
     <Compile Include="Initialization.cs" />
     <Compile Include="Model\AssetInformation.cs" />
     <Compile Include="Model\BundleResolveResult.cs" />
     <Compile Include="Model\SceneInformation.cs" />
+    <Compile Include="Model\SceneSignature.cs" />
     <Compile Include="Patches\PracticeModeDetector.cs" />
     <Compile Include="Patches\SpectatorManagerPatch.cs" />
     <Compile Include="Patches\UIChatControllerPatch.cs" />
@@ -65,6 +67,7 @@
     <Compile Include="Services\RinkSceneLoader.cs" />
     <Compile Include="Services\SceneDumper.cs" />
     <Compile Include="Behaviors\RinkOnlyPruner.cs" />
+    <Compile Include="Services\SceneLoadCoordinator.cs" />
     <Compile Include="Services\SkyboxLoader.cs" />
     <Compile Include="Singletons\ConfigData.cs" />
   </ItemGroup>
