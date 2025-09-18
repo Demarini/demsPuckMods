@@ -222,7 +222,7 @@ namespace SceneryLoader.Behaviors
             RemoveArena.TryPruneScene(scene, "SCENE LOADED");
             ReflectionKiller.NukeAllReflections();
             //RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            //RenderSettings.ambientLight = Color.black;
+            //RenderSettings.ambientLight = new Color(0.5f, 0.5f, 0.5f); // dark gray
             RenderSettings.skybox = null;   // optional: kills visible skybox if it’s contributing
                                             //LightingNullifier.KillAllSceneLighting(scene);
             foreach (var light in GameObject.FindObjectsOfType<Light>(true))

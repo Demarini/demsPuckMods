@@ -14,7 +14,7 @@ namespace SceneryChanger.Services
 {
     public static class SceneLoadCoordinator
     {
-        public static float ServerWindowSec = 0.5f;
+        public static float ServerWindowSec = 3f;
 
         static bool _waiting;
         static float _deadline;

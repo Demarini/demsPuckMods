@@ -56,8 +56,21 @@ namespace SceneryChanger.Patches
                     Debug.LogWarning("[SpectatorRemover] Could not find 'SpectatorLocations'.");
                     return false;
                 }
+                List<Transform> spectatorSpots = new List<Transform>();
 
-                foreach (Transform child in spectatorLocations.transform)
+                foreach (Transform child in spectatorLocations.GetComponentsInChildren<Transform>(true))
+                {
+                    // Skip root, and skip organizational parents
+                    if (child == spectatorLocations.transform) continue;
+
+                    if (child.name.StartsWith("Spectator") &&
+                        !child.name.Contains("Column") &&
+                        !child.name.Contains("Row"))
+                    {
+                        spectatorSpots.Add(child);
+                    }
+                }
+                foreach (Transform child in spectatorSpots)
                 {
                     //Debug.Log("Adding spectator");
                     // remove optional plane

@@ -42,13 +42,16 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Behaviors\CoroutineRunner.cs" />
+    <Compile Include="Behaviors\DetectGameState.cs" />
     <Compile Include="Behaviors\MuteAmbience.cs" />
     <Compile Include="Config\ModConfig.cs" />
+    <Compile Include="Helpers\ArenaLightUtil.cs" />
     <Compile Include="Initialization.cs" />
     <Compile Include="Model\AssetInformation.cs" />
     <Compile Include="Model\BundleResolveResult.cs" />
     <Compile Include="Model\SceneInformation.cs" />
     <Compile Include="Model\SceneSignature.cs" />
+    <Compile Include="Patches\LevelManagerPatch.cs" />
     <Compile Include="Patches\PracticeModeDetector.cs" />
     <Compile Include="Patches\SpectatorManagerPatch.cs" />
     <Compile Include="Patches\UIChatControllerPatch.cs" />

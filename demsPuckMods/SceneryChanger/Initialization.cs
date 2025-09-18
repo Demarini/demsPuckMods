@@ -17,17 +17,35 @@ namespace SceneryChanger
         public bool OnDisable()
         {
             harmony.UnpatchSelf();
+            CoroutineRunner.Uninstall();
             RinkOnlyPruner.Uninstall();
+            DetectGameState.Uninstall();
             //DisableAmbientCrowd.Uninstall();
             return true;
         }
 
         public bool OnEnable()
         {
+            Debug.Log("Entering On Enable");
             harmony.PatchAll();
+            Debug.Log("Harmony Patched");
             ModConfig.Initialize();
+            Debug.Log("Config Init");
             ConfigData.Load();
-            RinkOnlyPruner.Install();
+            Debug.Log("Config Load");
+            CoroutineRunner.Install();
+            Debug.Log("Coroutine Runner Load");
+            try
+            {
+                RinkOnlyPruner.Install();
+                Debug.Log("Rink Prune Installed");
+            }
+            catch(Exception ex)
+            {
+                Debug.Log("WTF Happened? " + ex.Message.ToString());
+            }
+            
+            DetectGameState.Install();
             //DisableAmbientCrowd.Install();
             Application.backgroundLoadingPriority = ThreadPriority.BelowNormal;
             // Larger buffer and more time slice = smoother uploads, fewer stalls
