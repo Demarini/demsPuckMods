@@ -44,8 +44,10 @@
     <Compile Include="Behaviors\CoroutineRunner.cs" />
     <Compile Include="Behaviors\DetectGameState.cs" />
     <Compile Include="Behaviors\MuteAmbience.cs" />
+    <Compile Include="Behaviors\UpdateAudioSources.cs" />
     <Compile Include="Config\ModConfig.cs" />
     <Compile Include="Helpers\ArenaLightUtil.cs" />
+    <Compile Include="Helpers\GetAudio.cs" />
     <Compile Include="Initialization.cs" />
     <Compile Include="Model\AssetInformation.cs" />
     <Compile Include="Model\BundleResolveResult.cs" />

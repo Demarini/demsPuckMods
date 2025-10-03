@@ -17,9 +17,17 @@ namespace SceneryChanger
         public bool OnDisable()
         {
             harmony.UnpatchSelf();
-            CoroutineRunner.Uninstall();
-            RinkOnlyPruner.Uninstall();
-            DetectGameState.Uninstall();
+            try
+            {
+                CoroutineRunner.Uninstall();
+                RinkOnlyPruner.Uninstall();
+                DetectGameState.Uninstall();
+                //UpdateAudioSources.Uninstall();
+            }
+            catch(Exception e)
+            {
+                Debug.Log(e.StackTrace.ToString());
+            }
             //DisableAmbientCrowd.Uninstall();
             return true;
         }
@@ -46,6 +54,7 @@ namespace SceneryChanger
             }
             
             DetectGameState.Install();
+            //UpdateAudioSources.Install();
             //DisableAmbientCrowd.Install();
             Application.backgroundLoadingPriority = ThreadPriority.BelowNormal;
             // Larger buffer and more time slice = smoother uploads, fewer stalls
