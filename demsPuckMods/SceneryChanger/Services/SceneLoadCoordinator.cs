@@ -1,14 +1,15 @@
 ﻿using SceneryChanger.Behaviors;
 using SceneryChanger.Model;
+using SceneryLoader.Behaviors;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using UnityEngine.SceneManagement;
+using Unity.Netcode;
 using UnityEngine;
-using SceneryLoader.Behaviors;
+using UnityEngine.SceneManagement;
 
 namespace SceneryChanger.Services
 {
@@ -106,6 +107,17 @@ namespace SceneryChanger.Services
 
         static void RequestLoad(Scene scene, SceneInformation si, string sourceTag)
         {
+            if (NetworkManager.Singleton.IsServer && !NetworkManager.Singleton.IsClient)
+            {
+                Debug.Log("Is Server and Not Client, Don't Load");
+                return;
+            }
+            else
+            {
+                Debug.Log("Is Client, Load Scene");
+            }
+
+
             var sig = new SceneSignature(si);
             _pendingSig = sig;
             Debug.Log($"[Coordinator] Requesting load: {sourceTag} -> {sig}");

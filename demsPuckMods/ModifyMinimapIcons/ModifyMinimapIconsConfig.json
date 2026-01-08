@@ -20,11 +20,6 @@
   "pulseOpponentIcon": false,
   "opponentPulseSpeed": 4.0,
   "opponentPulseStrength": 0.2,
-  "highlightOpenTeammates": true,
-  "openHighlightColor": "#FFFF00",
-  "passBlockRadius": 2.5,
-  "passBlockDistanceLimit": 25.0,
-  "scalePassDetectionWithMinimap": true,
   "puckScale": 1.0,
   "puckColor": "#000000"
 }

@@ -47,14 +47,14 @@ namespace SceneryChanger.Patches
             }
 
             Debug.Log("[Patch] PHASE CHANGED 2");
-
+            bool isCheering = false;
             switch (gamePhase)
             {
                 case GamePhase.BlueScore:
                 case GamePhase.RedScore:
                 case GamePhase.GameOver:
                     Debug.Log("[Patch] SOMEONE SCORED A GOAL");
-                    ToggleCheer(true);
+                    isCheering = true;
                     break;
 
                 case GamePhase.Warmup:
@@ -62,6 +62,7 @@ namespace SceneryChanger.Patches
                     // ToggleCheer(false);
                     break;
             }
+            ToggleCheer(isCheering);
             bool turnOn = gamePhase == GamePhase.BlueScore
                        || gamePhase == GamePhase.RedScore
                        || gamePhase == GamePhase.Warmup

@@ -89,11 +89,6 @@ namespace ModifyMinimapIcons
         public bool pulseOpponentIcon { get; set; } = false;
         public float opponentPulseSpeed { get; set; } = 4.0f;
         public float opponentPulseStrength { get; set; } = 0.2f;
-        public bool highlightOpenTeammates { get; set; } = true;
-        public string openHighlightColor { get; set; } = "#FFFF00";
-        public float passBlockRadius { get; set; } = 2.5f;
-        public float passBlockDistanceLimit { get; set; } = 25f;
-        public bool scalePassDetectionWithMinimap { get; set; } = true;
         public float puckScale { get; set; } = 0.99f;
         public string puckColor { get; set; } = "#000000";
 

@@ -25,7 +25,7 @@ namespace SceneryLoader.Singletons
             try
             {
                 Debug.Log("[SceneryLoader] Loading config...");
-
+                ModConfig.Refresh(seedIfMissing: true);
                 if (string.IsNullOrEmpty(ConfigPath))
                 {
                     Debug.LogWarning("[SceneryLoader] No ConfigPath available; using in-memory defaults.");

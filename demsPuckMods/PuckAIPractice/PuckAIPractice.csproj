@@ -83,7 +83,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="PostBuildMoveDll" AfterTargets="Build">
     <PropertyGroup>
-      <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\PuckAIPractice</TargetDir>
+      <TargetDir>E:\SteamLibrary\steamapps\common\Puck\Plugins\PuckAIPractice</TargetDir>
     </PropertyGroup>
     <MakeDir Directories="$(TargetDir)" />
     <!-- Copy the DLL -->

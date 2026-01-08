@@ -123,26 +123,6 @@ namespace ModifyMinimapIcons
             return null;
         }
 
-        private static bool IsPlayerOpen(PlayerBodyV2 local, PlayerBodyV2 teammate, List<PlayerBodyV2> opponents, float openDistance, float passLaneWidth)
-        {
-            Vector3 localPos = local.transform.position;
-            Vector3 teammatePos = teammate.transform.position;
-
-            foreach (var opponent in opponents)
-            {
-                if (opponent == null) continue;
-
-                Vector3 oppPos = opponent.transform.position;
-                if (Vector3.Distance(oppPos, teammatePos) < openDistance)
-                    return false;
-
-                float distanceToLine = DistancePointToLine(oppPos, localPos, teammatePos);
-                if (distanceToLine < passLaneWidth)
-                    return false;
-            }
-            return true;
-        }
-
         private static float DistancePointToLine(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
         {
             Vector3 lineDir = lineEnd - lineStart;
@@ -313,26 +293,6 @@ namespace ModifyMinimapIcons
                         }
                     }
                 }
-
-                // Highlight teammates
-                //if (cfg.highlightOpenTeammates && localPlayer != null &&
-                //    targetTeam == __instance.Team && !isLocal && !isSpectator)
-                //{
-                //    var opponents = new List<PlayerBodyV2>();
-                //    foreach (var opp in playerMap.Keys)
-                //    {
-                //        if (opp?.Player != null && opp.Player.Team.Value != __instance.Team)
-                //            opponents.Add(opp);
-                //    }
-
-                //    float radius = cfg.passBlockRadius;
-                //    if (cfg.scalePassDetectionWithMinimap)
-                //        radius *= MinimapValues.CurrentScale;
-
-                //    bool isOpen = IsPlayerOpen(localPlayer, playerBody, opponents, radius, cfg.passBlockDistanceLimit);
-                //    if (isOpen)
-                //        body.style.unityBackgroundImageTintColor = new StyleColor(ConfigData.HexToColor(cfg.openHighlightColor));
-                //}
 
                 // Apply scaling relative to minimap zoom
                 float minimapScale = MinimapValues.CurrentScale;

@@ -22,7 +22,7 @@ namespace SceneryChanger
                 CoroutineRunner.Uninstall();
                 RinkOnlyPruner.Uninstall();
                 DetectGameState.Uninstall();
-                //UpdateAudioSources.Uninstall();
+                UpdateAudioSources.Uninstall();
             }
             catch(Exception e)
             {
@@ -54,7 +54,7 @@ namespace SceneryChanger
             }
             
             DetectGameState.Install();
-            //UpdateAudioSources.Install();
+            UpdateAudioSources.Install();
             //DisableAmbientCrowd.Install();
             Application.backgroundLoadingPriority = ThreadPriority.BelowNormal;
             // Larger buffer and more time slice = smoother uploads, fewer stalls

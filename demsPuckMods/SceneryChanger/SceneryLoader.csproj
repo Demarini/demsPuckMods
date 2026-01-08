@@ -92,7 +92,7 @@
   </ItemGroup>
   <Target Name="PostBuildMoveDll" AfterTargets="Build">
     <PropertyGroup>
-      <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\SceneryLoader</TargetDir>
+      <TargetDir>E:\SteamLibrary\steamapps\common\Puck\Plugins\SceneryLoader</TargetDir>
     </PropertyGroup>
     <MakeDir Directories="$(TargetDir)" />
     <!-- Copy the DLL -->
