@@ -65,9 +65,9 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-  <Target Name="PostBuildMoveDll" AfterTargets="Build">
+  <Target Name="PostBuildMoveDll" AfterTargets="Build" Condition="Exists('$(PuckInstallDir)')">
     <PropertyGroup>
-      <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\MOTD</TargetDir>
+      <TargetDir>$(PuckInstallDir)\Plugins\MOTD</TargetDir>
     </PropertyGroup>
     <MakeDir Directories="$(TargetDir)" />
     <!-- Copy the DLL -->

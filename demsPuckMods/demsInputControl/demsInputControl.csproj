@@ -74,9 +74,9 @@
     </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Target Name="PostBuildMoveDll" AfterTargets="Build">
+  <Target Name="PostBuildMoveDll" AfterTargets="Build" Condition="Exists('$(PuckInstallDir)')">
     <PropertyGroup>
-      <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\InputControl</TargetDir>
+      <TargetDir>$(PuckInstallDir)\Plugins\InputControl</TargetDir>
     </PropertyGroup>
     <MakeDir Directories="$(TargetDir)" />
     <!-- Copy the DLL -->

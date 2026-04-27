@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Single place to update when your Steam library moves drives -->
+    <PuckInstallDir>E:\SteamLibrary\steamapps\common\Puck</PuckInstallDir>
+  </PropertyGroup>
+</Project>

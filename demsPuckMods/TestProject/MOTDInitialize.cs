@@ -27,7 +27,7 @@ namespace MOTD
         {
 
             harmony.PatchAll();
-            ModConfig.Initialize();
+            MOTD.Config.MOTDConfig.Initialize();
             ConfigData.Load();
             SimpleModal.Install();
             return true;
