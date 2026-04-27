@@ -43,3 +43,7 @@ demsPuckMods/ServerBrowserInGame/obj/
 /demsPuckMods/BanIdiots/obj/Debug
 demsPuckMods/SceneryChanger/obj/
 demsPuckMods/SceneryChanger/bin/
+/demsPuckMods/BanIdiots/obj/Release
+/demsPuckMods/ServerFavorites/obj/Release
+/demsPuckMods/TestProject/obj/Release
+/.vs
