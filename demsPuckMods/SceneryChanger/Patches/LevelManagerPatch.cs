@@ -3,6 +3,7 @@ using SceneryChanger.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Netcode;
@@ -10,84 +11,68 @@ using UnityEngine;
 
 namespace SceneryChanger.Patches
 {
-    [HarmonyPatch(typeof(LevelManagerController))]
-    class Patch_LevelManagerController
+    // PuckNew renamed LevelManagerController → LevelController and changed the event from
+    // Event_OnGamePhaseChanged (raw GamePhase) to Event_Everyone_OnGameStateChanged (GameState objects).
+    // TargetMethod() resolves the target at runtime so this compiles against old libs too;
+    // if LevelController doesn't exist the patch silently skips.
+    [HarmonyPatch]
+    class Patch_LevelController
     {
         static bool? _lastOn;
         static GameObject _arenaLights;
-        [HarmonyPostfix]
-        [HarmonyPatch(typeof(LevelManagerController), "Event_OnGamePhaseChanged")]
-        static void Postfix(LevelManagerController __instance, Dictionary<string, object> message)
+
+        static MethodBase TargetMethod()
+        {
+            var type = AccessTools.TypeByName("LevelController");
+            return type == null ? null : AccessTools.Method(type, "Event_Everyone_OnGameStateChanged");
+        }
+
+        static void Postfix(object __instance, Dictionary<string, object> eventParams)
         {
             var nm = NetworkManager.Singleton;
-            Debug.Log($"[Patch] PHASE CHANGED (IsClient={nm?.IsClient}, IsServer={nm?.IsServer}, IsHost={nm?.IsHost})");
+            Debug.Log($"[Patch] GAME STATE CHANGED (IsClient={nm?.IsClient}, IsServer={nm?.IsServer}, IsHost={nm?.IsHost})");
 
-            // --- choose ONE of these guards ---
-
-            // A) Run on any client *including host* (good for local testing)
             if (nm != null && !nm.IsClient) return;
 
-            // B) If you truly want *pure clients only*, use this instead:
-            // if (nm != null && (!nm.IsClient || nm.IsServer)) return;
-
-            if (message == null || !message.TryGetValue("newGamePhase", out var raw))
+            if (eventParams == null || !eventParams.TryGetValue("newGameState", out var raw))
             {
-                Debug.LogWarning("[Patch] newGamePhase missing");
+                Debug.LogWarning("[Patch] newGameState missing");
                 return;
             }
 
-            GamePhase gamePhase;
-            if (raw is GamePhase gp) gamePhase = gp;
-            else if (raw is int i) gamePhase = (GamePhase)i;
-            else if (raw is byte b) gamePhase = (GamePhase)b;
-            else
+            if (!(raw is GameState newState))
             {
-                Debug.LogWarning($"[Patch] newGamePhase unexpected type: {raw.GetType()}");
+                Debug.LogWarning($"[Patch] newGameState unexpected type: {raw?.GetType()}");
                 return;
             }
 
-            Debug.Log("[Patch] PHASE CHANGED 2");
-            bool isCheering = false;
-            switch (gamePhase)
-            {
-                case GamePhase.BlueScore:
-                case GamePhase.RedScore:
-                case GamePhase.GameOver:
-                    Debug.Log("[Patch] SOMEONE SCORED A GOAL");
-                    isCheering = true;
-                    break;
+            GamePhase gamePhase = newState.Phase;
 
-                case GamePhase.Warmup:
-                case GamePhase.PeriodOver:
-                    // ToggleCheer(false);
-                    break;
-            }
+            Debug.Log("[Patch] GAME STATE CHANGED 2");
+            bool isCheering = gamePhase == GamePhase.BlueScore
+                           || gamePhase == GamePhase.RedScore
+                           || gamePhase == GamePhase.GameOver;
+
+            if (isCheering)
+                Debug.Log("[Patch] SOMEONE SCORED A GOAL");
+
             ToggleCheer(isCheering);
+
             bool turnOn = gamePhase == GamePhase.BlueScore
                        || gamePhase == GamePhase.RedScore
                        || gamePhase == GamePhase.Warmup
                        || gamePhase == GamePhase.FaceOff;
 
-            // Only do work if the desired state changed
             if (_lastOn.HasValue && _lastOn.Value == turnOn) return;
             _lastOn = turnOn;
 
-            // Find (or reuse cached) ArenaLights
             if (_arenaLights == null)
-                _arenaLights = SceneryChanger.Helpers.ArenaLightUtil.FindArenaLights();
+                _arenaLights = ArenaLightUtil.FindArenaLights();
 
-            if (_arenaLights == null)
-            {
-                // Not in scene yet — skip quietly
-                // Debug.Log("[DetectGameState] ArenaLights not found yet.");
-                return;
-            }
+            if (_arenaLights == null) return;
 
             if (_arenaLights.activeSelf != turnOn)
-            {
                 _arenaLights.SetActive(turnOn);
-                // Debug.Log($"[DetectGameState] ArenaLights -> {(turnOn ? "ON" : "OFF")}");
-            }
         }
         public static AudioSource FindGoalCrowdSource()
         {

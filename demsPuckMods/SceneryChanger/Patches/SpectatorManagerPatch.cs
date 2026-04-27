@@ -12,7 +12,9 @@ namespace SceneryChanger.Patches
 {
     public class SpectatorManagerPatch
     {
-        [HarmonyPatch(typeof(SpectatorManager), nameof(SpectatorManager.SpawnSpectators))]
+        // SpawnSpectators() was removed in PuckNew; spectators now register themselves via
+        // RegisterSpectatorPosition/UnregisterSpectatorPosition. Patch disabled to prevent
+        // PatchAll() from throwing on a missing method.
         public static class SpectatorManager_SpawnSpectators_Patch
         {
             static bool Prefix(SpectatorManager __instance)
