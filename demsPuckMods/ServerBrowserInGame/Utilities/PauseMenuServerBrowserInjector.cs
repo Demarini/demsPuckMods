@@ -85,12 +85,14 @@ namespace PuckAIPractice.Utilities
                 var ui = UIManager.Instance;
                 if (ui == null) return;
 
-                bool esc =
-                    Input.GetKeyDown(KeyCode.Escape)
+                // Use new Input System when available; fall back to legacy Input only when it isn't.
+                // Calling Input.GetKeyDown unconditionally floods logs when the new Input System
+                // is active exclusively (PuckNew uses Input System Package only).
 #if ENABLE_INPUT_SYSTEM
-        || (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+                bool esc = Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame;
+#else
+                bool esc = Input.GetKeyDown(KeyCode.Escape);
 #endif
-                    ;
 
                 if (!esc) return;
 

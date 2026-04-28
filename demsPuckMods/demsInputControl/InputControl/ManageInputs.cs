@@ -55,6 +55,32 @@ namespace demsInputControl
         private static float _pingSpikeEndTime = -1f;
         private static float _pingSpikeExtraLatency = 0f;
 
+        // PuckNew added RpcParams as a trailing parameter to all Client_*Rpc methods.
+        // Cache MethodInfos and pad with default(RpcParams) when the runtime signature has more params.
+        private static readonly Dictionary<string, MethodInfo> _rpcMethodCache = new Dictionary<string, MethodInfo>();
+        private static void InvokeRpcMethod(PlayerInput input, string methodName, params object[] args)
+        {
+            if (!_rpcMethodCache.TryGetValue(methodName, out var mi))
+            {
+                mi = typeof(PlayerInput).GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                _rpcMethodCache[methodName] = mi;
+            }
+            if (mi == null) return;
+            var paramInfos = mi.GetParameters();
+            if (paramInfos.Length == args.Length)
+            {
+                mi.Invoke(input, args);
+            }
+            else if (paramInfos.Length > args.Length)
+            {
+                var fullArgs = new object[paramInfos.Length];
+                for (int i = 0; i < args.Length; i++) fullArgs[i] = args[i];
+                for (int i = args.Length; i < paramInfos.Length; i++)
+                    fullArgs[i] = Activator.CreateInstance(paramInfos[i].ParameterType);
+                mi.Invoke(input, fullArgs);
+            }
+        }
+
         private static float CurrentDelay
         {
             get
@@ -105,8 +131,10 @@ namespace demsInputControl
             _pingSpikeEndTime = Time.time + durationSeconds;
             InputControlLogger.Log(LogCategory.PracticeModeDetection, $"[PingSpike] Simulating spike of +{extraLatencyMs}ms for {durationSeconds}s");
         }
-        private static readonly MethodInfo handleInputsMethod = typeof(PlayerBodyV2)
-            .GetMethod("HandleInputs", BindingFlags.NonPublic | BindingFlags.Instance);
+        // PuckNew: PlayerBodyV2 renamed to PlayerBody — resolve type at runtime
+        private static MethodInfo HandleInputsMethod =>
+            (AccessTools.TypeByName("PlayerBody") ?? AccessTools.TypeByName("PlayerBodyV2"))
+                ?.GetMethod("HandleInputs", BindingFlags.NonPublic | BindingFlags.Instance);
 
         private static void QueueAllInputs(PlayerInput input)
         {
@@ -139,23 +167,18 @@ namespace demsInputControl
 
                 EnqueueOrApply(() =>
                 {
-                    input.Client_MoveInputRpc(x, y);
+                    InvokeRpcMethod(input, "Client_MoveInputRpc", x, y);
                     input.MoveInput.ClientTick();
 
-                    var body = input.GetComponent<PlayerBodyV2>();
+                    var playerBodyType = AccessTools.TypeByName("PlayerBody") ?? AccessTools.TypeByName("PlayerBodyV2");
+                    var body = playerBodyType != null ? input.GetComponent(playerBodyType) : null;
                     var movement = input.GetComponent<Movement>();
-                    if (body != null && movement != null && movement.Rigidbody != null && handleInputsMethod != null)
+                    var him = HandleInputsMethod;
+                    if (body != null && movement != null && movement.Rigidbody != null && him != null)
                     {
                         Vector3 localVel = movement.MovementDirection.InverseTransformVector(movement.Rigidbody.linearVelocity);
                         if (Mathf.Abs(localVel.z) < 0.05f) // Only invoke when movement has stopped
-                        {
-                            //Debug.Log("[InputControl] Velocity near zero, calling HandleInputs()");
-                            handleInputsMethod.Invoke(body, null);
-                        }
-                        else
-                        {
-                            //Debug.Log("[InputControl] Skipping HandleInputs() due to velocity: " + localVel.z.ToString("F3"));
-                        }
+                            him.Invoke(body, null);
                     }
                 },
                 () => { });
@@ -164,50 +187,50 @@ namespace demsInputControl
             {
                 short x = (short)(input.StickRaycastOriginAngleInput.ClientValue.x / 360f * 32767f);
                 short y = (short)(input.StickRaycastOriginAngleInput.ClientValue.y / 360f * 32767f);
-                EnqueueOrApply(() => input.Client_RaycastOriginAngleInputRpc(x, y), () => input.StickRaycastOriginAngleInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_RaycastOriginAngleInputRpc", x, y), () => input.StickRaycastOriginAngleInput.ClientTick());
             }
 
             if (input.LookAngleInput.HasChanged)
             {
                 short x = (short)(input.LookAngleInput.ClientValue.x / 360f * 32767f);
                 short y = (short)(input.LookAngleInput.ClientValue.y / 360f * 32767f);
-                EnqueueOrApply(() => input.Client_LookAngleInputRpc(x, y), () => input.LookAngleInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_LookAngleInputRpc", x, y), () => input.LookAngleInput.ClientTick());
             }
 
             if (input.BladeAngleInput.HasChanged)
             {
                 var val = input.BladeAngleInput.ClientValue;
-                EnqueueOrApply(() => input.Client_BladeAngleInputRpc(val), () => input.BladeAngleInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_BladeAngleInputRpc", val), () => input.BladeAngleInput.ClientTick());
             }
 
             if (input.SlideInput.HasChanged)
             {
                 var val = input.SlideInput.ClientValue;
-                EnqueueOrApply(() => input.Client_SlideInputRpc(val), () => input.SlideInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_SlideInputRpc", val), () => input.SlideInput.ClientTick());
             }
 
             if (input.SprintInput.HasChanged && (!SprintControl.IsSprintingBlockedByVelocity || !ConfigData.Instance.ModifySprintControl.AllowModifySprintControl))
             {
                 InputControlLogger.Log(LogCategory.SprintControl, "Sprint Input Changed");
                 var val = input.SprintInput.ClientValue;
-                EnqueueOrApply(() => input.Client_SprintInputRpc(val), () => input.SprintInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_SprintInputRpc", val), () => input.SprintInput.ClientTick());
             }
 
             if (input.TrackInput.HasChanged)
             {
                 var val = input.TrackInput.ClientValue;
-                EnqueueOrApply(() => input.Client_TrackInputRpc(val), () => input.TrackInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_TrackInputRpc", val), () => input.TrackInput.ClientTick());
             }
 
             if (input.LookInput.HasChanged)
             {
                 var val = input.LookInput.ClientValue;
-                EnqueueOrApply(() => input.Client_LookInputRpc(val), () => input.LookInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_LookInputRpc", val), () => input.LookInput.ClientTick());
             }
 
             if (input.JumpInput.HasChanged)
             {
-                EnqueueOrApply(() => input.Client_JumpInputRpc(), () => input.JumpInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_JumpInputRpc"), () => input.JumpInput.ClientTick());
             }
             InputControlLogger.Log(LogCategory.StopControl, $"Stop Has Changed {input.StopInput.HasChanged}");
             InputControlLogger.Log(LogCategory.StopControl, $"Client Value {input.StopInput.ClientValue}");
@@ -216,76 +239,74 @@ namespace demsInputControl
             if (input.StopInput.HasChanged && !StopOverridePatch.ShouldForceStopInputChanged)
             {
                 InputControlLogger.Log(LogCategory.StopControl, "Queuing manual StopInput change");
-                EnqueueOrApply(() => input.Client_StopInputRpc(input.StopInput.ClientValue), () => input.StopInput.ClientTick());
+                var stopVal = input.StopInput.ClientValue;
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_StopInputRpc", stopVal), () => input.StopInput.ClientTick());
             }
 
             if (StopOverridePatch.ShouldForceStopInputChanged)
             {
                 InputControlLogger.Log(LogCategory.StopControl, "Stop Input Has Changed");
                 StopOverridePatch.LastForceStopInput = StopOverridePatch.ShouldForceStopInput;
-                EnqueueOrApply(() => input.Client_StopInputRpc(StopOverridePatch.ShouldForceStopInput), () => { });
+                var forceStop = StopOverridePatch.ShouldForceStopInput;
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_StopInputRpc", forceStop), () => { });
                 InputControlLogger.Log(LogCategory.StopControl, $"Sending Stop Input {StopOverridePatch.ShouldForceStopInput}");
                 InputControlLogger.Log(LogCategory.StopControl, $"Server Value {input.StopInput.ServerValue}");
             }
             if (input.JumpInput.HasChanged)
             {
-                EnqueueOrApply(() => input.Client_JumpInputRpc(), () => input.JumpInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_JumpInputRpc"), () => input.JumpInput.ClientTick());
             }
             if (input.TwistLeftInput.HasChanged)
             {
-                EnqueueOrApply(() => input.Client_TwistLeftInputRpc(), () => input.TwistLeftInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_TwistLeftInputRpc"), () => input.TwistLeftInput.ClientTick());
             }
 
             if (input.TwistRightInput.HasChanged)
             {
-                EnqueueOrApply(() => input.Client_TwistRightInputRpc(), () => input.TwistRightInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_TwistRightInputRpc"), () => input.TwistRightInput.ClientTick());
             }
 
             if (input.DashLeftInput.HasChanged)
             {
-                EnqueueOrApply(() => input.Client_DashLeftInputRpc(), () => input.DashLeftInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_DashLeftInputRpc"), () => input.DashLeftInput.ClientTick());
             }
 
             if (input.DashRightInput.HasChanged)
             {
-                EnqueueOrApply(() => input.Client_DashRightInputRpc(), () => input.DashRightInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_DashRightInputRpc"), () => input.DashRightInput.ClientTick());
             }
 
             if (input.ExtendLeftInput.HasChanged)
             {
                 var val = input.ExtendLeftInput.ClientValue;
-                EnqueueOrApply(() => input.Client_ExtendLeftInputRpc(val), () => input.ExtendLeftInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_ExtendLeftInputRpc", val), () => input.ExtendLeftInput.ClientTick());
             }
 
             if (input.ExtendRightInput.HasChanged)
             {
                 var val = input.ExtendRightInput.ClientValue;
-                EnqueueOrApply(() => input.Client_ExtendRightInputRpc(val), () => input.ExtendRightInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_ExtendRightInputRpc", val), () => input.ExtendRightInput.ClientTick());
             }
 
             if (input.LateralLeftInput.HasChanged)
             {
                 var val = input.LateralLeftInput.ClientValue;
-                EnqueueOrApply(() => input.Client_LateralLeftInputRpc(val), () => input.LateralLeftInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_LateralLeftInputRpc", val), () => input.LateralLeftInput.ClientTick());
             }
 
             if (input.LateralRightInput.HasChanged)
             {
                 var val = input.LateralRightInput.ClientValue;
-                EnqueueOrApply(() => input.Client_LateralRightInputRpc(val), () => input.LateralRightInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_LateralRightInputRpc", val), () => input.LateralRightInput.ClientTick());
             }
 
             if (input.TalkInput.HasChanged)
             {
                 var val = input.TalkInput.ClientValue;
-                EnqueueOrApply(() => input.Client_TalkInputRpc(val), () => input.TalkInput.ClientTick());
+                EnqueueOrApply(() => InvokeRpcMethod(input, "Client_TalkInputRpc", val), () => input.TalkInput.ClientTick());
             }
 
-            if (input.SleepInput.HasChanged)
-            {
-                var val = input.SleepInput.ClientValue;
-                EnqueueOrApply(() => input.Client_SleepInputRpc(val), () => input.SleepInput.ClientTick());
-            }
+            // SleepInput removed in PuckNew
         }
         public static void EnqueueCustomInput(PlayerInput input, Action rpc)
         {
