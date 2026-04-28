@@ -1,5 +1,4 @@
 using demsInputControl.Logging;
-using HarmonyLib;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,8 +29,7 @@ namespace demsInputControl.Utils
 
         private static float faceoffTimer = 0f;
 
-        // PuckNew: PlayerBodyV2 renamed to PlayerBody — accept Component so both compile
-        public static void Update(Component player)
+        public static void Update(PlayerBody player)
         {
             if (player == null) return;
             Vector3 currentPosition = player.transform.position;
@@ -103,11 +101,10 @@ namespace demsInputControl.Utils
             float forwardDot = Vector3.Dot(player.transform.forward, SmoothedMovementDirection);
             IsMovingBackwards = forwardDot < -0.2f;
 
-            float speed = Traverse.Create(player).Property("Speed").GetValue<float>();
+            float speed = player.Movement != null ? player.Movement.Speed : 0f;
             LastLocalZVelocity = IsMovingBackwards ? speed * -1 : speed;
 
-            var velocityLean = Traverse.Create(player).Property("VelocityLean").GetValue<object>();
-            bool inverted = velocityLean != null && Traverse.Create(velocityLean).Property("Inverted").GetValue<bool>();
+            bool inverted = player.VelocityLean != null && player.VelocityLean.Inverted;
 
             InputControlLogger.Log(LogCategory.Velocity, $"[VelocityTracker] LocalZ={LastLocalZVelocity:F3}, Predicted={PredictedLocalZVelocity:F3}, Faceoff={IsFaceoff}, Speed={velocity.magnitude:F3}");
             InputControlLogger.Log(LogCategory.Velocity, $"[VelocityTracker] MovementDirection={SmoothedMovementDirection}, IsBackwards={IsMovingBackwards}");

@@ -2,30 +2,21 @@ using demsInputControl.Singletons;
 using demsInputControl.Utils;
 using demsInputControl.Logging;
 using HarmonyLib;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.UIElements;
-using UnityEngine.Windows;
 
 namespace demsInputControl.InputControl
 {
-    // PuckNew: PlayerBodyV2 renamed to PlayerBody — store as Component for transform access
     public static class LocalPlayerLocator
     {
-        public static Component Cached { get; private set; }
+        public static PlayerBody Cached { get; private set; }
 
         public static bool TryFind()
         {
-            var type = AccessTools.TypeByName("PlayerBody") ?? AccessTools.TypeByName("PlayerBodyV2");
-            if (type == null) return false;
-
-            foreach (Component pb in UnityEngine.Object.FindObjectsOfType(type))
+            foreach (var pb in UnityEngine.Object.FindObjectsOfType<PlayerBody>())
             {
-                var player = Traverse.Create(pb).Property("Player").GetValue<Player>();
-                if (player != null && player.IsLocalPlayer)
+                if (pb?.Player != null && pb.Player.IsLocalPlayer)
                 {
                     Cached = pb;
                     InputControlLogger.Log(LogCategory.StopControl, $"[InputControl] Found local player: {pb.name}");
@@ -35,6 +26,7 @@ namespace demsInputControl.InputControl
             return false;
         }
     }
+
     [HarmonyPatch]
     public static class StopOverridePatch
     {
@@ -51,22 +43,15 @@ namespace demsInputControl.InputControl
             }
         }
 
-        // PuckNew: PlayerBodyV2 → PlayerBody (TargetMethod resolves at runtime)
-        [HarmonyPatch]
+        [HarmonyPatch(typeof(PlayerBody), "FixedUpdate")]
         public static class PlayerBodyVelocityTrackerPatch
         {
             static int UpdatePerFrame = 0;
             static int FixedUpdateCount = 0;
             static float TimePassed = 0;
 
-            static MethodBase TargetMethod()
-            {
-                var type = AccessTools.TypeByName("PlayerBody") ?? AccessTools.TypeByName("PlayerBodyV2");
-                return type == null ? null : AccessTools.Method(type, "FixedUpdate");
-            }
-
             [HarmonyPostfix]
-            public static void Postfix(object __instance)
+            public static void Postfix(PlayerBody __instance)
             {
                 TimePassed += Time.fixedDeltaTime;
                 FixedUpdateCount++;
@@ -76,23 +61,21 @@ namespace demsInputControl.InputControl
                     if (__instance != null)
                     {
                         InputControlLogger.Log(LogCategory.StopControl, "Instance isn't null");
-                        var player = Traverse.Create(__instance).Property("Player").GetValue<Player>();
-                        if (player != null)
+                        if (__instance.Player != null)
                         {
-                            if (player.IsLocalPlayer)
+                            if (__instance.Player.IsLocalPlayer)
                             {
                                 LocalPlayerLocator.TryFind();
-                                var rigidbody = Traverse.Create(__instance).Property("Rigidbody").GetValue<Rigidbody>();
-                                if (rigidbody == null)
+                                if (__instance.Rigidbody == null)
                                 {
                                     InputControlLogger.Log(LogCategory.StopControl, "Rigid Body Null");
                                 }
                                 else
                                 {
                                     InputControlLogger.Log(LogCategory.StopControl, "Rigid Body Not Null");
-                                    InputControlLogger.Log(LogCategory.StopControl, $"Rigid Body Velo: {rigidbody.linearVelocity}");
+                                    InputControlLogger.Log(LogCategory.StopControl, $"Rigid Body Velo: {__instance.Rigidbody.linearVelocity}");
                                 }
-                                LocalVelocityTracker.Update(__instance as Component);
+                                LocalVelocityTracker.Update(__instance);
                                 TimePassed = 0;
                             }
                             else
@@ -110,7 +93,7 @@ namespace demsInputControl.InputControl
                         if (LocalPlayerLocator.Cached == null)
                             LocalPlayerLocator.TryFind();
 
-                        LocalVelocityTracker.Update(__instance as Component);
+                        LocalVelocityTracker.Update(__instance);
                     }
                 }
             }
@@ -163,7 +146,9 @@ namespace demsInputControl.InputControl
             if (forceStopConfig == null) return true;
 
             InputControlLogger.Log(LogCategory.StopControl, $"Player Local Velocity Z {LocalVelocityTracker.LastLocalZVelocity}");
-            Vector2 inputDir = new Vector2(x / 32767f, y / 32767f);
+            Vector2 inputDir = new Vector2(
+                NetworkingUtils.DecompressShortToFloat(x, -1f, 1f),
+                NetworkingUtils.DecompressShortToFloat(y, -1f, 1f));
 
             float tickRate = __instance.TickRate > 0 ? __instance.TickRate : 200;
             float tickInterval = 1f / tickRate;
@@ -219,32 +204,20 @@ namespace demsInputControl.InputControl
         [HarmonyPrefix]
         public static bool Prefix(PlayerInput __instance, bool value)
         {
-            var flags = BindingFlags.NonPublic | BindingFlags.Instance;
-            var execStageField = typeof(NetworkBehaviour).GetField("__rpc_exec_stage", flags);
-            // execStage accessed via reflection — logging commented out in original
             return true;
         }
     }
 
-    // PuckNew: PlayerBodyV2 → PlayerBody (TargetMethod resolves at runtime)
-    [HarmonyPatch]
+    [HarmonyPatch(typeof(PlayerBody), "HandleInputs")]
     public static class HandleInputsLoggerPatch
     {
-        static MethodBase TargetMethod()
-        {
-            var type = AccessTools.TypeByName("PlayerBody") ?? AccessTools.TypeByName("PlayerBodyV2");
-            return type == null ? null
-                : type.GetMethod("HandleInputs", BindingFlags.NonPublic | BindingFlags.Instance);
-        }
-
         [HarmonyPostfix]
-        private static void Postfix(object __instance)
+        private static void Postfix(PlayerBody __instance)
         {
-            var movement = Traverse.Create(__instance).Property("Movement").GetValue<Movement>();
+            var movement = __instance.Movement;
             if (movement == null) return;
 
             Vector3 velocity = movement.Rigidbody?.linearVelocity ?? Vector3.zero;
-            // Remaining log calls commented out in original — preserved
         }
     }
 

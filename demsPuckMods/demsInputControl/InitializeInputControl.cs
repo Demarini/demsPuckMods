@@ -20,7 +20,7 @@ namespace demsInputControl
         public bool OnEnable()
         {
             Debug.Log("[InputControl] Mod enabled");
-            ModConfig.Initialize();
+            InputControlModConfig.Initialize();
             ConfigData.Load();
             PluginBehaviour.Initialize();
             //HarmonyFileLog.Enabled = true;

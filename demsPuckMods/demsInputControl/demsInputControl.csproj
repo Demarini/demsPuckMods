@@ -42,7 +42,8 @@
   </ItemGroup>
   <ItemGroup>
     <!-- Reference every DLL in libs/, but don’t include them as project items -->
-    <Reference Include="..\libs\*.dll" Exclude="..\libs\System.*.dll">
+    <!-- Exclude stale Puck DLLs that still define PlayerBodyV2/old RPC signatures -->
+    <Reference Include="..\libs\*.dll" Exclude="..\libs\System.*.dll;..\libs\Puck_Backup.dll;..\libs\Puck_Modded.dll">
       <HintPath>%(FullPath)</HintPath>
       <Private>false</Private>
     </Reference>
