@@ -21,10 +21,23 @@ namespace SceneryChanger.Patches
         static bool? _lastOn;
         static GameObject _arenaLights;
 
+        static Type _gameStateType;
+        static MethodInfo _phaseGetter;
+        static bool _reflectionInit;
+
         static MethodBase TargetMethod()
         {
             var type = AccessTools.TypeByName("LevelController");
             return type == null ? null : AccessTools.Method(type, "Event_Everyone_OnGameStateChanged");
+        }
+
+        static void InitReflection()
+        {
+            if (_reflectionInit) return;
+            _reflectionInit = true;
+            _gameStateType = AccessTools.TypeByName("GameState");
+            if (_gameStateType != null)
+                _phaseGetter = AccessTools.PropertyGetter(_gameStateType, "Phase");
         }
 
         static void Postfix(object __instance, Dictionary<string, object> eventParams)
@@ -40,13 +53,16 @@ namespace SceneryChanger.Patches
                 return;
             }
 
-            if (!(raw is GameState newState))
+            InitReflection();
+            if (_gameStateType == null || _phaseGetter == null) return;
+
+            if (raw == null || !_gameStateType.IsInstanceOfType(raw))
             {
                 Debug.LogWarning($"[Patch] newGameState unexpected type: {raw?.GetType()}");
                 return;
             }
 
-            GamePhase gamePhase = newState.Phase;
+            GamePhase gamePhase = (GamePhase)_phaseGetter.Invoke(raw, null);
 
             Debug.Log("[Patch] GAME STATE CHANGED 2");
             bool isCheering = gamePhase == GamePhase.BlueScore

@@ -359,7 +359,9 @@ namespace SceneryChanger.Services
 
             yield return null; // let children finish Awake/Start
 
-            var mgr = SpectatorManager.Instance;
+            // Use reflection to avoid MonoBehaviourSingleton<T>.Instance generic inflation TLE.
+            var smType = AccessTools.TypeByName("SpectatorManager");
+            var mgr = smType != null ? UnityEngine.Object.FindFirstObjectByType(smType) : null;
             if (!mgr) { Debug.LogWarning("[SceneLoader] SpectatorManager missing."); yield break; }
 
             // Bump density so most positions actually get a spectator (default is 0.25)

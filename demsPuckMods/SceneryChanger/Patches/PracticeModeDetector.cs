@@ -1,32 +1,39 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Unity.Netcode;
 using UnityEngine;
 
 namespace SceneryChanger.Patches
 {
-    [HarmonyPatch(typeof(WebSocketManager))]
     public static class PracticeModeDetector
     {
         public static bool IsPracticeMode { get; private set; } = false;
 
-        [HarmonyPostfix]
-        [HarmonyPatch("Emit")]
-        private static void Emit_Postfix(string messageName, Dictionary<string, object> data, string responseMessageName)
+        [HarmonyPatch]
+        public static class Patch_Emit
         {
-            try
+            static MethodBase TargetMethod()
             {
-                if (messageName == "serverAuthenticateRequest" && data != null && data.ContainsKey("name"))
-                {
-                    string name = data["name"]?.ToString() ?? "";
-                    IsPracticeMode = name.ToUpperInvariant() == "PRACTICE";
-
-                }
+                var type = AccessTools.TypeByName("WebSocketManager");
+                return type == null ? null : AccessTools.Method(type, "Emit");
             }
-            catch (Exception ex)
-            {
 
+            [HarmonyPostfix]
+            static void Postfix(string messageName, Dictionary<string, object> data, string responseMessageName)
+            {
+                try
+                {
+                    if (messageName == "serverAuthenticateRequest" && data != null && data.ContainsKey("name"))
+                    {
+                        string name = data["name"]?.ToString() ?? "";
+                        IsPracticeMode = name.ToUpperInvariant() == "PRACTICE";
+                    }
+                }
+                catch (Exception)
+                {
+                }
             }
         }
 
@@ -39,29 +46,29 @@ namespace SceneryChanger.Patches
                 if (connectionDataJson != null && connectionDataJson.Contains("\"name\":\"PRACTICE\""))
                 {
                     IsPracticeMode = true;
-                    //MOTDLogger.Log(LogCategory.PracticeModeDetection, "Practice Mode Detected via ConnectionManager: True");
                 }
             }
             catch
             {
-                // Swallow silently (no logging here)
             }
         }
 
         public static void OnClientDisconnect()
         {
-            if (IsPracticeMode)
-                //MOTDLogger.Log(LogCategory.PracticeModeDetection, "Left Practice Mode (Disconnect)");
-
             IsPracticeMode = false;
         }
 
-        [HarmonyPatch(typeof(ConnectionManager))]
-        public static class ConnectionManagerPracticePatches
+        [HarmonyPatch]
+        public static class Patch_ClientStartClient
         {
+            static MethodBase TargetMethod()
+            {
+                var type = AccessTools.TypeByName("ConnectionManager");
+                return type == null ? null : AccessTools.Method(type, "Client_StartClient");
+            }
+
             [HarmonyPostfix]
-            [HarmonyPatch("Client_StartClient")]
-            private static void AfterStartClient(ConnectionManager __instance, string ipAddress, ushort port, string password)
+            static void Postfix(object __instance, string ipAddress, ushort port, string password)
             {
                 string json = null;
                 if (__instance != null && NetworkManager.Singleton != null)
@@ -69,14 +76,23 @@ namespace SceneryChanger.Patches
                     json = System.Text.Encoding.ASCII.GetString(NetworkManager.Singleton.NetworkConfig.ConnectionData);
                 }
 
-                PracticeModeDetector.OnClientStart(ipAddress, port, password, json);
+                OnClientStart(ipAddress, port, password, json);
+            }
+        }
+
+        [HarmonyPatch]
+        public static class Patch_ClientDisconnect
+        {
+            static MethodBase TargetMethod()
+            {
+                var type = AccessTools.TypeByName("ConnectionManager");
+                return type == null ? null : AccessTools.Method(type, "Client_Disconnect");
             }
 
             [HarmonyPostfix]
-            [HarmonyPatch("Client_Disconnect")]
-            private static void AfterDisconnect()
+            static void Postfix()
             {
-                PracticeModeDetector.OnClientDisconnect();
+                OnClientDisconnect();
             }
         }
     }

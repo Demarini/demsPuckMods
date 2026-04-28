@@ -1,84 +1,71 @@
-﻿using HarmonyLib;
-using SceneryLoader.Behaviors;
+using HarmonyLib;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using SceneryLoader.Singletons;
-using SceneryLoader.Config;
+using System.Runtime.CompilerServices;
 using UnityEngine;
-using SceneryChanger.Behaviors;
 namespace SceneryChanger
 {
     public class Initialization : IPuckMod
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.SceneryChanger");
-        public bool OnDisable()
-        {
-            try { Application.logMessageReceived -= OnLogMessage; } catch { }
-            harmony.UnpatchSelf();
-            try
-            {
-                CoroutineRunner.Uninstall();
-                RinkOnlyPruner.Uninstall();
-                DetectGameState.Uninstall();
-                UpdateAudioSources.Uninstall();
-            }
-            catch(Exception e)
-            {
-                Debug.Log(e.StackTrace.ToString());
-            }
-            //DisableAmbientCrowd.Uninstall();
-            return true;
-        }
 
-        static bool _tleStackCaptured;
-        static int _tleSuppressed;
-        static void OnLogMessage(string condition, string stackTrace, LogType type)
-        {
-            if (string.IsNullOrEmpty(condition)) return;
-            if (condition.IndexOf("Invalid generic instantiation", StringComparison.Ordinal) < 0) return;
-            if (!_tleStackCaptured)
-            {
-                _tleStackCaptured = true;
-                Debug.Log($"[SceneryLoader-TLE] First occurrence captured. Stack:\n{stackTrace}");
-            }
-            // Future occurrences are silently dropped — they don't reach Debug.Log here so they
-            // still appear in the raw player log unfortunately, but we now have the stack.
-            _tleSuppressed++;
-        }
+        // === TLE DIAGNOSTIC ===
+        // Phase 1: Set NOOP=true. If TLE still floods, the assembly itself is the problem.
+        //          If TLE stops, set NOOP=false and move to Phase 2.
+        // Phase 2: Uncomment lines in DoEnable() one group at a time to find the source.
+        static readonly bool NOOP = false;
 
         public bool OnEnable()
         {
+            if (NOOP)
+            {
+                Debug.Log("[SceneryChanger] NOOP mode — mod loaded but doing nothing");
+                return true;
+            }
+            return DoEnable();
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        bool DoEnable()
+        {
             Debug.Log("Entering On Enable");
-            try { Application.logMessageReceived -= OnLogMessage; Application.logMessageReceived += OnLogMessage; } catch { }
+
+            // --- GROUP 1: Patches ---
             harmony.PatchAll();
-            Debug.Log("Harmony Patched");
-            ModConfig.Initialize();
-            Debug.Log("Config Init");
-            ConfigData.Load();
-            Debug.Log("Config Load");
-            CoroutineRunner.Install();
-            Debug.Log("Coroutine Runner Load");
+
+            // --- GROUP 2: Config ---
+            SceneryLoader.Config.ModConfig.Initialize();
+            SceneryLoader.Singletons.ConfigData.Load();
+
+            // --- GROUP 3: Behaviors ---
+            SceneryChanger.Behaviors.CoroutineRunner.Install();
+            SceneryLoader.Behaviors.RinkOnlyPruner.Install();
+            SceneryChanger.Behaviors.DetectGameState.Install();
+            SceneryChanger.Behaviors.UpdateAudioSources.Install();
+
+            // --- GROUP 4: Unity settings ---
+            Application.backgroundLoadingPriority = ThreadPriority.BelowNormal;
+            QualitySettings.asyncUploadBufferSize = 64;
+            QualitySettings.asyncUploadTimeSlice = 4;
+            QualitySettings.asyncUploadPersistentBuffer = true;
+
+            return true;
+        }
+
+        public bool OnDisable()
+        {
+            if (NOOP) return true;
+            harmony.UnpatchSelf();
             try
             {
-                RinkOnlyPruner.Install();
-                Debug.Log("Rink Prune Installed");
+                SceneryChanger.Behaviors.CoroutineRunner.Uninstall();
+                SceneryLoader.Behaviors.RinkOnlyPruner.Uninstall();
+                SceneryChanger.Behaviors.DetectGameState.Uninstall();
+                SceneryChanger.Behaviors.UpdateAudioSources.Uninstall();
             }
-            catch(Exception ex)
+            catch (Exception e)
             {
-                Debug.Log("WTF Happened? " + ex.Message.ToString());
+                Debug.Log(e.StackTrace.ToString());
             }
-            
-            DetectGameState.Install();
-            UpdateAudioSources.Install();
-            //DisableAmbientCrowd.Install();
-            Application.backgroundLoadingPriority = ThreadPriority.BelowNormal;
-            // Larger buffer and more time slice = smoother uploads, fewer stalls
-            QualitySettings.asyncUploadBufferSize = 64;   // MB
-            QualitySettings.asyncUploadTimeSlice = 4;   // ms per frame
-            QualitySettings.asyncUploadPersistentBuffer = true;
             return true;
         }
     }

@@ -1,4 +1,5 @@
-﻿using Unity.Netcode;
+using HarmonyLib;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace SceneryChanger.Behaviors
@@ -18,6 +19,13 @@ namespace SceneryChanger.Behaviors
         static GameObject _arenaLights; // cache
         static bool? _lastOn;           // last applied state
 
+        // Reflection cache: avoids direct GameManager.Instance reference which triggers
+        // MonoBehaviourSingleton<T> generic inflation TLE on Mono.
+        static System.Type _gmType;
+        static System.Reflection.MethodInfo _phaseGetter;
+        static bool _reflectionInit;
+        static Object _cachedGM;
+
         public static void Install()
         {
             if (_instance) return;
@@ -33,6 +41,7 @@ namespace SceneryChanger.Behaviors
             _instance = null;
             _arenaLights = null;
             _lastOn = null;
+            _cachedGM = null;
         }
 
         // OPTIONAL: call this when you know a new rink/scene was loaded
@@ -42,8 +51,18 @@ namespace SceneryChanger.Behaviors
             if (_instance == null) return;
             _arenaLights = null;
             _lastOn = null;
+            _cachedGM = null;
             _instance._findElapsed = 0f;
             _instance._findExpired = false;
+        }
+
+        static void InitReflection()
+        {
+            if (_reflectionInit) return;
+            _reflectionInit = true;
+            _gmType = AccessTools.TypeByName("GameManager");
+            if (_gmType != null)
+                _phaseGetter = AccessTools.PropertyGetter(_gmType, "Phase");
         }
 
         void Update()
@@ -55,8 +74,14 @@ namespace SceneryChanger.Behaviors
             if (_timer < interval) return;
             _timer = 0f;
 
-            if (GameManager.Instance == null) return;
-            var phase = GameManager.Instance.Phase;
+            InitReflection();
+            if (_gmType == null || _phaseGetter == null) return;
+
+            if (!_cachedGM)
+                _cachedGM = Object.FindFirstObjectByType(_gmType);
+            if (!_cachedGM) return;
+
+            var phase = (GamePhase)_phaseGetter.Invoke(_cachedGM, null);
 
             bool desiredOn =
                    phase == GamePhase.BlueScore

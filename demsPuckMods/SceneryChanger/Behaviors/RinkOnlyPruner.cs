@@ -190,16 +190,18 @@ namespace SceneryLoader.Behaviors
             // One more frame so children under SpectatorLocations finish activating
             yield return null;
 
-            var mgr = SpectatorManager.Instance;
+            // Use reflection to avoid MonoBehaviourSingleton<T>.Instance generic inflation TLE.
+            var smType = AccessTools.TypeByName("SpectatorManager");
+            var mgr = smType != null ? UnityEngine.Object.FindFirstObjectByType(smType) : null;
             if (mgr == null)
             {
-                Debug.LogWarning("[SceneLoader] SpectatorManager.Instance not found. Skipping spawn.");
+                Debug.LogWarning("[SceneLoader] SpectatorManager not found. Skipping spawn.");
                 yield break;
             }
 
             try
             {
-                mgr.SpawnSpectators();
+                AccessTools.Method(smType, "SpawnSpectators")?.Invoke(mgr, null);
                 Debug.Log("[SceneLoader] Spectators spawned.");
             }
             catch (Exception e)

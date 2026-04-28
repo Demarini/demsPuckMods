@@ -19,11 +19,17 @@ namespace SceneryChanger.Patches
     {
         public static SceneInformation sceneInformation = null;
 
-        // PuckNew: the old UIChatController.Event_Server_OnSynchronizeComplete no longer exists.
-        // The equivalent hook is SceneManager.Server_OnClientSceneSynchronizeComplete (private static).
-        // Chat delivery now goes through ChatManager, not UIChat.Server_SendSystemChatMessage.
+        static MethodBase TargetMethod()
+        {
+            // Use reflection to find the game's SceneManager (global namespace),
+            // not Unity's UnityEngine.SceneManagement.SceneManager.
+            var type = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(a => { try { return a.GetTypes(); } catch { return Type.EmptyTypes; } })
+                .FirstOrDefault(t => t.Name == "SceneManager" && (t.Namespace == null || t.Namespace == ""));
+            return type == null ? null : AccessTools.Method(type, "Server_OnClientSceneSynchronizeComplete");
+        }
+
         [HarmonyPostfix]
-        [HarmonyPatch(typeof(global::SceneManager), "Server_OnClientSceneSynchronizeComplete")]
         static void SyncComplete_Postfix(ulong clientId)
         {
             if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
@@ -44,27 +50,26 @@ namespace SceneryChanger.Patches
             }
         }
 
-        // PuckNew: ChatManager replaces UIChat.Server_SendSystemChatMessage.
-        // Resolved via reflection so this compiles against old libs without ChatManager.
         static void SendChatToClient(string message, ulong clientId)
         {
             var chatManagerType = AccessTools.TypeByName("ChatManager");
             if (chatManagerType == null) { Debug.LogWarning("[SceneryChanger] ChatManager not found"); return; }
-            var singletonType = typeof(NetworkBehaviourSingleton<>).MakeGenericType(chatManagerType);
-            var instance = AccessTools.PropertyGetter(singletonType, "Instance")?.Invoke(null, null);
+            var instance = AccessTools.PropertyGetter(chatManagerType.BaseType, "Instance")?.Invoke(null, null);
             if (instance == null) { Debug.LogWarning("[SceneryChanger] ChatManager.Instance is null"); return; }
             AccessTools.Method(chatManagerType, "Server_SendChatMessageToClients")
                 ?.Invoke(instance, new object[] { message, new ulong[] { clientId } });
         }
 
-        // PuckNew: UIChat.AddChatMessage now takes (ChatMessage, Units, bool) instead of (string).
-        // TargetMethod resolves the overload at runtime so this compiles against old libs too.
         [HarmonyPatch]
         public static class UIChat_AddChatMessage_LoadMapPatch
         {
-            static MethodBase TargetMethod() =>
-                typeof(UIChat).GetMethods()
+            static MethodBase TargetMethod()
+            {
+                var type = AccessTools.TypeByName("UIChat");
+                if (type == null) return null;
+                return type.GetMethods()
                     .FirstOrDefault(m => m.Name == "AddChatMessage" && m.GetParameters().Length == 3);
+            }
 
             [HarmonyPrefix]
             static bool Prefix(UIChat __instance, ChatMessage chatMessage)
@@ -115,11 +120,10 @@ namespace SceneryChanger.Patches
                     SceneLoadCoordinator.OnServerSceneDirective(si);
                 }
 
-                return false; // swallow the raw !LoadMap message from chat
+                return false;
             }
         }
 
-        // PuckNew: Content (FixedString); old Puck: Message (string). Resolved at runtime.
         static string GetMessageText(ChatMessage chatMessage)
         {
             var v = Traverse.Create(chatMessage).Property("Content").GetValue<object>()
