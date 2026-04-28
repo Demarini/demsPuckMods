@@ -16,6 +16,7 @@ namespace SceneryChanger
         static readonly Harmony harmony = new Harmony("GAFURIX.SceneryChanger");
         public bool OnDisable()
         {
+            try { Application.logMessageReceived -= OnLogMessage; } catch { }
             harmony.UnpatchSelf();
             try
             {
@@ -32,9 +33,26 @@ namespace SceneryChanger
             return true;
         }
 
+        static bool _tleStackCaptured;
+        static int _tleSuppressed;
+        static void OnLogMessage(string condition, string stackTrace, LogType type)
+        {
+            if (string.IsNullOrEmpty(condition)) return;
+            if (condition.IndexOf("Invalid generic instantiation", StringComparison.Ordinal) < 0) return;
+            if (!_tleStackCaptured)
+            {
+                _tleStackCaptured = true;
+                Debug.Log($"[SceneryLoader-TLE] First occurrence captured. Stack:\n{stackTrace}");
+            }
+            // Future occurrences are silently dropped — they don't reach Debug.Log here so they
+            // still appear in the raw player log unfortunately, but we now have the stack.
+            _tleSuppressed++;
+        }
+
         public bool OnEnable()
         {
             Debug.Log("Entering On Enable");
+            try { Application.logMessageReceived -= OnLogMessage; Application.logMessageReceived += OnLogMessage; } catch { }
             harmony.PatchAll();
             Debug.Log("Harmony Patched");
             ModConfig.Initialize();

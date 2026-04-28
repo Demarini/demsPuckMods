@@ -1,4 +1,5 @@
-﻿using SceneryChanger.Behaviors;
+﻿using HarmonyLib;
+using SceneryChanger.Behaviors;
 using SceneryChanger.Model;
 using SceneryLoader.Behaviors;
 using SceneryLoader.Services;
@@ -87,6 +88,7 @@ namespace SceneryChanger.Services
             var container = EnsureContainer();
             stagedRoot.transform.SetParent(container.transform, true);
 
+            RebindShadersToGameRuntime(stagedRoot);
             DumpStagedRoot(stagedRoot);
 
             // --- Apply skybox for *this token* only ---
@@ -115,12 +117,41 @@ namespace SceneryChanger.Services
             if (old) UnityEngine.Object.Destroy(old); // destroy AFTER new is ready to avoid blank frames
             yield return null; // let Destroy settle
 
-            // --- Spectators: wait for locations then spawn (guarded by token) ---
-            yield return SpawnSpectatorsWhenLocationsReady(token, 8f);
+            // --- Spectators: search inside the staged prefab and tag positions ---
+            yield return SpawnSpectatorsFromStagedRoot(stagedRoot, token);
             
             // Optional cleanup of stray legacy objects AFTER swap
             //ClearLegacyOutsideContainer(); // see helper below (non-blocking)
         }
+        static void RebindShadersToGameRuntime(GameObject root)
+        {
+            try
+            {
+                int rebound = 0, missed = 0, kept = 0;
+                var seen = new HashSet<Material>();
+                var missedShaders = new HashSet<string>();
+                foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+                {
+                    foreach (var m in r.sharedMaterials)
+                    {
+                        if (m == null || !seen.Add(m)) continue;
+                        if (m.shader == null) continue;
+                        var name = m.shader.name;
+                        var fresh = Shader.Find(name);
+                        if (fresh == null) { missed++; missedShaders.Add(name); continue; }
+                        if (fresh == m.shader) { kept++; continue; }
+                        m.shader = fresh;
+                        rebound++;
+                    }
+                }
+                Debug.Log($"[SceneLoader] Shader rebind: rebound={rebound} keptSame={kept} missed={missed} missedNames=[{string.Join(", ", missedShaders)}]");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneLoader] Shader rebind failed: {e.Message}");
+            }
+        }
+
         static void DumpStagedRoot(GameObject root)
         {
             try
@@ -132,43 +163,176 @@ namespace SceneryChanger.Services
                 bool first = true;
                 int magentaShaderCount = 0;
                 int nullMatCount = 0;
+                var layerHist = new Dictionary<int, int>();
+                var shaderHist = new Dictionary<string, int>();
                 foreach (var r in renderers)
                 {
                     if (r.enabled && r.gameObject.activeInHierarchy) enabledRenderers++;
                     if (first) { combined = r.bounds; first = false; }
                     else combined.Encapsulate(r.bounds);
+
+                    int layer = r.gameObject.layer;
+                    if (!layerHist.ContainsKey(layer)) layerHist[layer] = 0;
+                    layerHist[layer]++;
+
                     foreach (var m in r.sharedMaterials)
                     {
                         if (m == null) { nullMatCount++; continue; }
                         var sh = m.shader;
-                        if (sh == null || sh.name == "Hidden/InternalErrorShader" || sh.name.StartsWith("Hidden/"))
+                        var sname = sh?.name ?? "<null>";
+                        if (!shaderHist.ContainsKey(sname)) shaderHist[sname] = 0;
+                        shaderHist[sname]++;
+                        if (sh == null || sname == "Hidden/InternalErrorShader" || sname.StartsWith("Hidden/"))
                             magentaShaderCount++;
                     }
                 }
                 Debug.Log($"[SceneLoader] Staged root '{root.name}' active={root.activeSelf}/{root.activeInHierarchy} pos={t.position} scale={t.lossyScale} renderers={renderers.Length} enabled={enabledRenderers} bounds={(first ? "n/a" : combined.ToString())} nullMats={nullMatCount} brokenShaders={magentaShaderCount}");
                 Debug.Log($"[SceneLoader] Container '{root.transform.parent?.name}' active={root.transform.parent?.gameObject.activeInHierarchy} scene='{root.scene.name}'");
 
-                // dump the first few children for shape
+                // Layer histogram + names
+                var layerStr = string.Join(", ", layerHist.OrderByDescending(kv => kv.Value).Select(kv => $"{kv.Key}({LayerMask.LayerToName(kv.Key)})={kv.Value}"));
+                Debug.Log($"[SceneLoader] Renderer layer histogram: {layerStr}");
+
+                // Shader histogram
+                var shaderStr = string.Join(", ", shaderHist.OrderByDescending(kv => kv.Value).Take(8).Select(kv => $"'{kv.Key}'={kv.Value}"));
+                Debug.Log($"[SceneLoader] Top shaders in use: {shaderStr}");
+
+                // Cameras: which layers do they render? Frustum?
+                foreach (var cam in UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsSortMode.None))
+                {
+                    Debug.Log($"[SceneLoader] Camera '{cam.name}' enabled={cam.enabled} cullingMask=0x{cam.cullingMask:X8} far={cam.farClipPlane} pos={cam.transform.position}");
+                    // For each layer the renderers use, say whether this camera renders it
+                    foreach (var kv in layerHist)
+                    {
+                        bool sees = (cam.cullingMask & (1 << kv.Key)) != 0;
+                        if (!sees)
+                            Debug.LogWarning($"[SceneLoader]   Camera '{cam.name}' does NOT render layer {kv.Key} ({LayerMask.LayerToName(kv.Key)}) — {kv.Value} renderers there");
+                    }
+                }
+
+                // First few children
                 int childDump = 0;
                 foreach (Transform c in t)
                 {
                     if (childDump++ >= 8) break;
                     var rends = c.GetComponentsInChildren<Renderer>(true).Length;
-                    Debug.Log($"[SceneLoader]   child[{childDump - 1}] '{c.name}' active={c.gameObject.activeInHierarchy} pos={c.position} scale={c.lossyScale} rendersInTree={rends}");
+                    Debug.Log($"[SceneLoader]   child[{childDump - 1}] '{c.name}' active={c.gameObject.activeInHierarchy} layer={c.gameObject.layer}({LayerMask.LayerToName(c.gameObject.layer)}) pos={c.position} scale={c.lossyScale} rendersInTree={rends}");
                 }
 
-                // sample one material's shader so we can tell what to compare against
-                var sample = renderers.FirstOrDefault(r => r.sharedMaterial != null);
-                if (sample != null)
+                // ShadowCastingMode + forceRenderingOff histograms
+                var shadowHist = new Dictionary<UnityEngine.Rendering.ShadowCastingMode, int>();
+                int forceOffCount = 0;
+                int nullMeshCount = 0;
+                int zeroVertCount = 0;
+                int meshFilterCount = 0;
+                foreach (var r in renderers)
                 {
-                    var m = sample.sharedMaterial;
-                    Debug.Log($"[SceneLoader] Sample material on '{sample.name}': mat='{m.name}' shader='{m.shader?.name}' supported={(m.shader != null && m.shader.isSupported)}");
+                    var mode = r.shadowCastingMode;
+                    if (!shadowHist.ContainsKey(mode)) shadowHist[mode] = 0;
+                    shadowHist[mode]++;
+                    if (r.forceRenderingOff) forceOffCount++;
+
+                    var mf = r.GetComponent<MeshFilter>();
+                    if (mf != null)
+                    {
+                        meshFilterCount++;
+                        if (mf.sharedMesh == null) nullMeshCount++;
+                        else if (mf.sharedMesh.vertexCount == 0) zeroVertCount++;
+                    }
+                }
+                var shadowStr = string.Join(", ", shadowHist.Select(kv => $"{kv.Key}={kv.Value}"));
+                Debug.Log($"[SceneLoader] ShadowCastingMode histogram: {shadowStr}; forceRenderingOff={forceOffCount}; meshFilters={meshFilterCount} nullMesh={nullMeshCount} zeroVerts={zeroVertCount}");
+
+                // Sample a few individual mesh renderers at world position so we can see WHERE they are
+                int sampleN = Math.Min(5, renderers.Length);
+                for (int i = 0; i < sampleN; i++)
+                {
+                    var r = renderers[i];
+                    var mf = r.GetComponent<MeshFilter>();
+                    var mesh = mf != null ? mf.sharedMesh : null;
+                    var matName = r.sharedMaterial != null ? r.sharedMaterial.name : "<null>";
+                    var shaderName = r.sharedMaterial != null && r.sharedMaterial.shader != null ? r.sharedMaterial.shader.name : "<null>";
+                    Debug.Log($"[SceneLoader] Sample[{i}] '{r.name}' worldPos={r.transform.position} bounds={r.bounds} mesh='{(mesh != null ? mesh.name : "<null>")}' verts={(mesh != null ? mesh.vertexCount : 0)} mat='{matName}' shader='{shaderName}' enabled={r.enabled} shadowMode={r.shadowCastingMode}");
                 }
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"[SceneLoader] DumpStagedRoot failed: {e.Message}");
             }
+        }
+
+        static IEnumerator SpawnSpectatorsFromStagedRoot(GameObject stagedRoot, int token)
+        {
+            Debug.Log($"[SceneLoader] Spectators: entry (token={token}, currentToken={RinkSceneState.CurrentLoadToken}, stagedRoot={(stagedRoot != null ? stagedRoot.name : "<null>")})");
+            if (token != RinkSceneState.CurrentLoadToken) yield break;
+            if (stagedRoot == null) { Debug.LogWarning("[SceneLoader] Spectators: staged root is null"); yield break; }
+
+            yield return null; // let one frame settle so children are awake
+
+            var spectatorPositionType = AccessTools.TypeByName("SpectatorPosition");
+            if (spectatorPositionType == null)
+            {
+                Debug.LogWarning("[SceneLoader] Type 'SpectatorPosition' not found at runtime; skipping spectators.");
+                yield break;
+            }
+
+            // Try to bump spectator density via reflection (don't touch SpectatorManager.Instance directly —
+            // MonoBehaviourSingleton<T>.Instance has been seen to throw TypeLoadException at runtime).
+            try
+            {
+                var mgrType = AccessTools.TypeByName("SpectatorManager");
+                if (mgrType != null)
+                {
+                    var mgrObj = UnityEngine.Object.FindFirstObjectByType(mgrType);
+                    if (mgrObj != null)
+                        Traverse.Create(mgrObj).Field("spectatorDensity").SetValue(1.0f);
+                }
+            }
+            catch (Exception e) { Debug.LogWarning($"[SceneLoader] Could not set spectatorDensity: {e.Message}"); }
+
+            // Walk the entire staged prefab and find any transform whose name starts with "Spectator"
+            // (excluding organizational parents named with Column/Row).
+            var allTransforms = stagedRoot.GetComponentsInChildren<Transform>(true);
+            var spots = new List<Transform>();
+            var nameSamples = new List<string>();
+            foreach (var tr in allTransforms)
+            {
+                if (tr.name.StartsWith("Spectator", StringComparison.OrdinalIgnoreCase) &&
+                    !tr.name.Contains("Column") && !tr.name.Contains("Row"))
+                {
+                    spots.Add(tr);
+                }
+                else if (tr.name.IndexOf("spec", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         tr.name.IndexOf("audience", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         tr.name.IndexOf("fan", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         tr.name.IndexOf("seat", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    if (nameSamples.Count < 20) nameSamples.Add(tr.name);
+                }
+            }
+
+            Debug.Log($"[SceneLoader] Spectators: scanned {allTransforms.Length} transforms, found {spots.Count} 'Spectator*' spots");
+            if (spots.Count == 0)
+            {
+                if (nameSamples.Count > 0)
+                    Debug.LogWarning($"[SceneLoader] No 'Spectator*' spots — possible alternate names in bundle: [{string.Join(", ", nameSamples)}]");
+                else
+                    Debug.LogWarning("[SceneLoader] No spectator-like transforms found in bundle. Bundle may not contain spectator markers.");
+                yield break;
+            }
+
+            int tagged = 0, skipped = 0;
+            foreach (var child in spots)
+            {
+                if (child.GetComponent(spectatorPositionType) != null) { skipped++; continue; }
+
+                var plane = child.Find("Plane");
+                if (plane != null) UnityEngine.Object.Destroy(plane.gameObject);
+
+                child.gameObject.AddComponent(spectatorPositionType);
+                tagged++;
+            }
+            Debug.Log($"[SceneLoader] Spectators: tagged={tagged} alreadyTagged={skipped}");
         }
 
         static IEnumerator SpawnSpectatorsWhenLocationsReady(int token, float timeoutSec)
@@ -195,22 +359,40 @@ namespace SceneryChanger.Services
 
             yield return null; // let children finish Awake/Start
 
-            // Trigger your Harmony prefix path safely
-            RinkOnlyPruner.ReapplySpectators = true;
             var mgr = SpectatorManager.Instance;
             if (!mgr) { Debug.LogWarning("[SceneLoader] SpectatorManager missing."); yield break; }
 
-            try
+            // Bump density so most positions actually get a spectator (default is 0.25)
+            try { Traverse.Create(mgr).Field("spectatorDensity").SetValue(1.0f); }
+            catch (Exception e) { Debug.LogWarning($"[SceneLoader] Could not set spectatorDensity: {e.Message}"); }
+
+            // PuckNew: spectators register themselves via SpectatorPosition.Start() ->
+            // Event_OnSpectatorPositionSpawned -> SpectatorManager.RegisterSpectatorPosition.
+            // The bundle's spots are plain Transforms named "Spectator*"; tag each with a
+            // SpectatorPosition component and the game does the rest.
+            // Resolve via reflection because SpectatorPosition isn't visible at compile time.
+            var spectatorPositionType = AccessTools.TypeByName("SpectatorPosition");
+            if (spectatorPositionType == null)
             {
-                // Another guard just before spawning
-                Debug.Log("Trying to spawn custom specatators");
-                if (token != RinkSceneState.CurrentLoadToken) yield break;
-                mgr.SpawnSpectators(); // Prefix will do the custom placement
+                Debug.LogWarning("[SceneLoader] Type 'SpectatorPosition' not found at runtime; skipping spectators.");
+                yield break;
             }
-            finally
+
+            int tagged = 0, skipped = 0;
+            foreach (var child in locations.GetComponentsInChildren<Transform>(true))
             {
-                RinkOnlyPruner.ReapplySpectators = false;
+                if (child == locations) continue;
+                if (!child.name.StartsWith("Spectator")) continue;
+                if (child.name.Contains("Column") || child.name.Contains("Row")) continue;
+                if (child.GetComponent(spectatorPositionType) != null) { skipped++; continue; }
+
+                var plane = child.Find("Plane");
+                if (plane != null) UnityEngine.Object.Destroy(plane.gameObject);
+
+                child.gameObject.AddComponent(spectatorPositionType);
+                tagged++;
             }
+            Debug.Log($"[SceneLoader] Spectators: tagged={tagged} alreadyTagged={skipped}");
         }
         static void ClearLegacyOutsideContainer()
         {

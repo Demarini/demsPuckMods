@@ -77,7 +77,7 @@ namespace SceneryChanger.Patches
         public static AudioSource FindGoalCrowdSource()
         {
             // Look for HockeyArenaRoot -> GoalCrowdNoise
-            var root = UnityEngine.Object.FindObjectsOfType<Transform>(true)
+            var root = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None)
                              .FirstOrDefault(t => t.name.Contains("HockeyArenaRoot"));
             if (root == null)
             {
