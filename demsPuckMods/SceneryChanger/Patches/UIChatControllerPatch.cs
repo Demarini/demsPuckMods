@@ -56,7 +56,7 @@ namespace SceneryChanger.Patches
             if (chatManagerType == null) { Debug.LogWarning("[SceneryChanger] ChatManager not found"); return; }
             var instance = AccessTools.PropertyGetter(chatManagerType.BaseType, "Instance")?.Invoke(null, null);
             if (instance == null) { Debug.LogWarning("[SceneryChanger] ChatManager.Instance is null"); return; }
-            AccessTools.Method(chatManagerType, "Server_SendChatMessageToClients")
+            AccessTools.Method(chatManagerType, "Server_SendChatMessageToClients", new Type[] { typeof(string), typeof(ulong[]) })
                 ?.Invoke(instance, new object[] { message, new ulong[] { clientId } });
         }
 

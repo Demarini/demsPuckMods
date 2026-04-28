@@ -8,8 +8,31 @@ using UnityEngine.UIElements;
 
 namespace RotateMinimap
 {
-    // PuckNew: UIMinimap.RemovePlayerBody now takes PlayerBody (was PlayerBodyV2).
-    // Parameter declared as object so this compiles against old libs too.
+    static class MinimapFields
+    {
+        static bool _resolved;
+        static FieldInfo _boundsField;
+
+        public static void EnsureResolved(UIMinimap instance)
+        {
+            if (_resolved) return;
+            _resolved = true;
+            _boundsField = typeof(UIMinimap).GetField("Bounds", BindingFlags.Public | BindingFlags.Instance)
+                        ?? typeof(UIMinimap).GetField("Bounds", BindingFlags.NonPublic | BindingFlags.Instance);
+        }
+
+        public static VisualElement GetMinimap(UIMinimap inst)    => Traverse.Create(inst).Field("minimap").GetValue<VisualElement>();
+        public static VisualElement GetForeground(UIMinimap inst) => Traverse.Create(inst).Field("foreground").GetValue<VisualElement>();
+        public static VisualElement GetBackground(UIMinimap inst) => Traverse.Create(inst).Field("background").GetValue<VisualElement>();
+        public static VisualElement GetContent(UIMinimap inst)    => Traverse.Create(inst).Field("content").GetValue<VisualElement>();
+
+        public static Bounds? GetBounds(UIMinimap inst)
+        {
+            if (_boundsField == null) return null;
+            return (Bounds)_boundsField.GetValue(inst);
+        }
+    }
+
     [HarmonyPatch(typeof(UIMinimap), "RemovePlayerBody")]
     public static class MinimapPinnedIconCleanup
     {
@@ -24,20 +47,20 @@ namespace RotateMinimap
             var icon = playerMap[playerBody] as VisualElement;
             if (icon == null) return true;
 
-            var minimapRoot = Traverse.Create(__instance).Field("minimap").GetValue<VisualElement>();
+            MinimapFields.EnsureResolved(__instance);
+            var minimapRoot = MinimapFields.GetMinimap(__instance);
 
-            if (icon.parent == minimapRoot)
+            if (minimapRoot != null && icon.parent == minimapRoot)
             {
                 minimapRoot.Remove(icon);
                 playerMap.Remove(playerBody);
-                return false; // skip default removal to avoid double-remove
+                return false;
             }
 
             return true;
         }
     }
 
-    // PuckNew: UIMinimap.AddPlayerBody now takes PlayerBody (was PlayerBodyV2).
     [HarmonyPatch(typeof(UIMinimap), "AddPlayerBody")]
     public static class PinLocalPlayerIconPatch
     {
@@ -62,14 +85,17 @@ namespace RotateMinimap
                 pinnedLocalIcon = null;
             }
 
-            var minimapRoot  = Traverse.Create(__instance).Field("minimap").GetValue<VisualElement>();
-            var minimapLayer = Traverse.Create(__instance).Field("foreground").GetValue<VisualElement>();
+            MinimapFields.EnsureResolved(__instance);
+            var minimapRoot = MinimapFields.GetMinimap(__instance);
 
-            minimapLayer.Remove(icon);
-            minimapRoot.Add(icon);
-            icon.BringToFront();
-            icon.style.translate = new Translate(0, 0);
-            pinnedLocalIcon = icon;
+            if (minimapRoot != null)
+            {
+                icon.RemoveFromHierarchy();
+                minimapRoot.Add(icon);
+                icon.BringToFront();
+                icon.style.translate = new Translate(0, 0);
+                pinnedLocalIcon = icon;
+            }
         }
     }
 
@@ -81,16 +107,21 @@ namespace RotateMinimap
         [HarmonyPostfix]
         public static void Postfix(UIMinimap __instance)
         {
+            MinimapFields.EnsureResolved(__instance);
+
             if (!initialized)
             {
                 if (__instance.Team == PlayerTeam.Blue)
                 {
-                    var minimapVE = Traverse.Create(__instance).Field("minimap").GetValue<VisualElement>();
+                    var minimapVE = MinimapFields.GetMinimap(__instance);
                     if (minimapVE != null)
                         minimapVE.style.rotate = new Rotate(new Angle(180f, AngleUnit.Degree));
                 }
                 initialized = true;
             }
+
+            var bounds = MinimapFields.GetBounds(__instance);
+            if (bounds == null) return;
 
             var playerMap = Traverse.Create(__instance).Field("playerBodyVisualElementMap").GetValue<object>() as IDictionary;
             if (playerMap == null) return;
@@ -111,25 +142,22 @@ namespace RotateMinimap
                 float rotY = keyComp.transform.rotation.eulerAngles.y;
                 float value2 = (__instance.Team == PlayerTeam.Blue) ? rotY : (rotY + 180f);
 
-                var minimapVE = Traverse.Create(__instance).Field("minimap").GetValue<VisualElement>();
+                var minimapVE = MinimapFields.GetMinimap(__instance);
                 Vector3 position = (__instance.Team == PlayerTeam.Blue)
                     ? keyComp.transform.position
                     : -keyComp.transform.position;
 
-                var levelManager = NetworkBehaviourSingleton<LevelManager>.Instance;
-                if (levelManager == null) continue;
-
-                Vector2 vector = WorldPositionToMinimapPosition(position, levelManager.IceBounds, __instance);
+                Vector2 vector = WorldPositionToMinimapPosition(position, bounds.Value, __instance);
 
                 if (keyPlayer.IsLocalPlayer)
                 {
                     centerOffset = vector;
-                    var fgVE = Traverse.Create(__instance).Field("foreground").GetValue<VisualElement>();
-                    var bgVE = Traverse.Create(__instance).Field("background").GetValue<VisualElement>();
+                    var contentVE = MinimapFields.GetContent(__instance);
+                    var bgVE     = MinimapFields.GetBackground(__instance);
 
                     if (ConfigData.Instance.CenterOnPlayer)
                     {
-                        if (fgVE != null) fgVE.style.translate = new Translate(centerOffset.x, -centerOffset.y);
+                        if (contentVE != null) contentVE.style.translate = new Translate(centerOffset.x, -centerOffset.y);
                         if (bgVE != null) bgVE.style.translate = new Translate(centerOffset.x, -centerOffset.y);
                         value.style.translate = new Translate(0, 0);
                     }
@@ -146,7 +174,9 @@ namespace RotateMinimap
                         var key2Player = Traverse.Create(key2).Property("Player").GetValue<Player>();
                         if (key2Player == null || key2Player.IsLocalPlayer) continue;
 
-                        Label numberLabel = value3.Query<Label>("Number");
+                        Label numberLabel = value3.Query<Label>("NumberLabel").First();
+                        if (numberLabel == null)
+                            numberLabel = value3.Query<Label>("Number").First();
                         if (numberLabel != null)
                             numberLabel.style.rotate = new Rotate(value2 + 180f);
                     }
@@ -164,13 +194,13 @@ namespace RotateMinimap
 
         private static Vector2 WorldPositionToMinimapPosition(Vector3 position, Bounds bounds, UIMinimap __instance)
         {
-            var fgVE = Traverse.Create(__instance).Field("foreground").GetValue<VisualElement>();
+            var contentVE = MinimapFields.GetContent(__instance);
             Vector2 vector = new Vector2(
                 (position.x + bounds.center.x) / bounds.size.x,
                 (position.z + bounds.center.z) / bounds.size.z);
             Vector2 vector2 = new Vector2(
-                fgVE?.resolvedStyle.width ?? 0,
-                fgVE?.resolvedStyle.height ?? 0);
+                contentVE?.resolvedStyle.width ?? 0,
+                contentVE?.resolvedStyle.height ?? 0);
             return new Vector2(vector2.x * vector.x, vector2.y * vector.y);
         }
     }
