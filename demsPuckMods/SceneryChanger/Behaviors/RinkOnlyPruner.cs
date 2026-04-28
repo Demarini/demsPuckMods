@@ -45,7 +45,7 @@ namespace SceneryLoader.Behaviors
         public bool hardNuke = true;
 
         [Tooltip("Scene name to target.")]
-        public string targetScene = "level_1";
+        public string targetScene = "level_default";
 
         public int passes = 6;
         public float passInterval = 0.2f;
@@ -152,7 +152,7 @@ namespace SceneryLoader.Behaviors
         {
             Debug.Log("Scene Loaded!");
 
-            if (scene.name.Equals("level_1", StringComparison.OrdinalIgnoreCase))
+            if (scene.name.Equals("level_default", StringComparison.OrdinalIgnoreCase))
             {
                 //SceneDumper.DumpActiveSceneHierarchy(scene);
                 ConfigData.Load();

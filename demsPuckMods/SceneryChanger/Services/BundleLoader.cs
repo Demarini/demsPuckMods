@@ -29,9 +29,11 @@ namespace SceneryLoader.Services
             var resolved = BundleResolver.Resolve(bundleName, dllDir, preferEncrypted: enc);
             if (!resolved.Exists)
             {
+                Debug.LogWarning($"[BundleLoader] Bundle '{bundleName}' not resolved (enc={enc}, dllDir='{dllDir}'). No file matched candidates.");
                 CompleteInflightEarly($"{bundleName.ToLowerInvariant()}|{(enc ? "enc" : "raw")}|missing", null, onReady);
                 yield break;
             }
+            Debug.Log($"[BundleLoader] Resolved '{bundleName}' -> '{resolved.BundlePath}' (enc={enc})");
 
             byte[] key32 = null;
             if (enc)
@@ -228,11 +230,13 @@ namespace SceneryLoader.Services
             var prefab = req.asset as GameObject;
             if (prefab == null)
             {
-                Debug.LogError($"[BundleLoader] Prefab '{prefabName}' not found in bundle '{bundleName}'.");
+                var available = string.Join(", ", ab.GetAllAssetNames());
+                Debug.LogError($"[BundleLoader] Prefab '{prefabName}' not found in bundle '{bundleName}'. Available assets: {available}");
                 onReady?.Invoke(null);
                 yield break;
             }
 
+            Debug.Log($"[BundleLoader] Instantiating prefab '{prefabName}' from bundle '{bundleName}'");
             onReady?.Invoke(UnityEngine.Object.Instantiate(prefab));
         }
         static IEnumerator ForceUnloadUnityBundle(string bundleNameLower, string bundlesFolder = null)

@@ -34,6 +34,7 @@ namespace SceneryChanger.Services
         public static void LoadSceneAsync(Scene scene, SceneInformation si)
         {
             int token = ++RinkSceneState.CurrentLoadToken;
+            Debug.Log($"[SceneLoader] LoadSceneAsync token={token} bundle='{si?.bundleName}' prefab='{si?.prefabName}' skybox='{si?.skyboxName}' enc={!string.IsNullOrWhiteSpace(si?.contentKey64)}");
             CoroutineRunner.Instance.StartCoroutine(LoadSceneFlow(si, token));
         }
         static IEnumerator LoadSceneFlow(SceneInformation si, int token)
@@ -45,6 +46,12 @@ namespace SceneryChanger.Services
             string dllDir = Path.GetDirectoryName(typeof(BundleLoader).Assembly.Location);
             bool enc = !string.IsNullOrWhiteSpace(si.contentKey64);
             var resolved = BundleResolver.Resolve(si.bundleName, dllDir, preferEncrypted: enc);
+            Debug.Log($"[SceneLoader] BundleResolver: dllDir='{dllDir}' bundle='{si.bundleName}' enc={enc} -> Exists={resolved?.Exists} Path='{resolved?.BundlePath}'");
+            if (resolved == null || !resolved.Exists)
+            {
+                Debug.LogError($"[SceneLoader] Bundle '{si.bundleName}' not found under '{dllDir}\\AssetBundles' (or sibling mod folders). Aborting load.");
+                yield break;
+            }
             var info = resolved != null ? resolved.Info : null;
             if (info != null)
             {
@@ -80,6 +87,8 @@ namespace SceneryChanger.Services
             var container = EnsureContainer();
             stagedRoot.transform.SetParent(container.transform, true);
 
+            DumpStagedRoot(stagedRoot);
+
             // --- Apply skybox for *this token* only ---
             if (!string.IsNullOrEmpty(si.skyboxName))
             {
@@ -112,6 +121,56 @@ namespace SceneryChanger.Services
             // Optional cleanup of stray legacy objects AFTER swap
             //ClearLegacyOutsideContainer(); // see helper below (non-blocking)
         }
+        static void DumpStagedRoot(GameObject root)
+        {
+            try
+            {
+                var t = root.transform;
+                var renderers = root.GetComponentsInChildren<Renderer>(true);
+                int enabledRenderers = 0;
+                Bounds combined = default;
+                bool first = true;
+                int magentaShaderCount = 0;
+                int nullMatCount = 0;
+                foreach (var r in renderers)
+                {
+                    if (r.enabled && r.gameObject.activeInHierarchy) enabledRenderers++;
+                    if (first) { combined = r.bounds; first = false; }
+                    else combined.Encapsulate(r.bounds);
+                    foreach (var m in r.sharedMaterials)
+                    {
+                        if (m == null) { nullMatCount++; continue; }
+                        var sh = m.shader;
+                        if (sh == null || sh.name == "Hidden/InternalErrorShader" || sh.name.StartsWith("Hidden/"))
+                            magentaShaderCount++;
+                    }
+                }
+                Debug.Log($"[SceneLoader] Staged root '{root.name}' active={root.activeSelf}/{root.activeInHierarchy} pos={t.position} scale={t.lossyScale} renderers={renderers.Length} enabled={enabledRenderers} bounds={(first ? "n/a" : combined.ToString())} nullMats={nullMatCount} brokenShaders={magentaShaderCount}");
+                Debug.Log($"[SceneLoader] Container '{root.transform.parent?.name}' active={root.transform.parent?.gameObject.activeInHierarchy} scene='{root.scene.name}'");
+
+                // dump the first few children for shape
+                int childDump = 0;
+                foreach (Transform c in t)
+                {
+                    if (childDump++ >= 8) break;
+                    var rends = c.GetComponentsInChildren<Renderer>(true).Length;
+                    Debug.Log($"[SceneLoader]   child[{childDump - 1}] '{c.name}' active={c.gameObject.activeInHierarchy} pos={c.position} scale={c.lossyScale} rendersInTree={rends}");
+                }
+
+                // sample one material's shader so we can tell what to compare against
+                var sample = renderers.FirstOrDefault(r => r.sharedMaterial != null);
+                if (sample != null)
+                {
+                    var m = sample.sharedMaterial;
+                    Debug.Log($"[SceneLoader] Sample material on '{sample.name}': mat='{m.name}' shader='{m.shader?.name}' supported={(m.shader != null && m.shader.isSupported)}");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneLoader] DumpStagedRoot failed: {e.Message}");
+            }
+        }
+
         static IEnumerator SpawnSpectatorsWhenLocationsReady(int token, float timeoutSec)
         {
             float t0 = Time.realtimeSinceStartup;
