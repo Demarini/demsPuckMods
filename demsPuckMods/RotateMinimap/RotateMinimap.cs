@@ -65,6 +65,7 @@ namespace RotateMinimap
     public static class RotateMinimapPatch
     {
         static float _nextLogTime;
+        static bool _hierarchyDumped;
 
         [HarmonyPostfix]
         public static void Postfix(UIMinimap __instance)
@@ -108,7 +109,7 @@ namespace RotateMinimap
 
             if (!foundLocal) return;
 
-            float mapRotation = -localRotation + 180f;
+            float mapRotation = -localRotation;
             if (minimapVE != null)
                 minimapVE.style.rotate = new Rotate(mapRotation);
 
@@ -124,33 +125,40 @@ namespace RotateMinimap
             {
                 var ve = entry.Value as VisualElement;
                 if (ve == null) continue;
-                var player = Traverse.Create(entry.Key).Property("Player").GetValue<Player>();
-                if (player == null || player.IsLocalPlayer) continue;
 
-                Label numberLabel = ve.Query<Label>("NumberLabel").First();
-                if (numberLabel != null)
-                    numberLabel.style.rotate = new Rotate(localRotation - 180f);
+                var player = Traverse.Create(entry.Key).Property("Player").GetValue<Player>();
+                if (player != null && !player.IsLocalPlayer)
+                {
+                    Label numberLabel = ve.Query<Label>("NumberLabel").First();
+                    if (numberLabel != null)
+                        numberLabel.style.rotate = new Rotate(localRotation);
+                }
             }
 
             if (Time.time >= _nextLogTime)
             {
                 _nextLogTime = Time.time + 2f;
                 Debug.Log($"[RotateMinimap] Team={__instance.Team} CenterOnPlayer={ConfigData.Instance.CenterOnPlayer}");
-                Debug.Log($"[RotateMinimap] WorldPos={localWorldPos} MinimapPos={localMinimapPos} EulerY={localRotation:F1} MapRot={mapRotation:F1}");
-                if (contentVE != null)
-                    Debug.Log($"[RotateMinimap] ContentSize=({contentVE.resolvedStyle.width:F0},{contentVE.resolvedStyle.height:F0}) ContentTranslate=({localMinimapPos.x:F1},{(-localMinimapPos.y):F1})");
-                if (minimapVE != null)
-                    Debug.Log($"[RotateMinimap] MinimapSize=({minimapVE.resolvedStyle.width:F0},{minimapVE.resolvedStyle.height:F0})");
-                Debug.Log($"[RotateMinimap] Bounds center={bounds.Value.center} size={bounds.Value.size}");
+                Debug.Log($"[RotateMinimap] MapRot={mapRotation:F1} EulerY={localRotation:F1}");
+                Debug.Log($"[RotateMinimap] WorldPos={localWorldPos} MinimapPos={localMinimapPos}");
             }
+        }
+
+        private static void DumpHierarchy(VisualElement el, int depth)
+        {
+            string indent = new string(' ', depth * 2);
+            string rot = el.resolvedStyle.rotate.angle.value != 0 ? $" rot={el.resolvedStyle.rotate.angle.value:F0}" : "";
+            Debug.Log($"[RotateMinimap] {indent}<{el.GetType().Name}> name='{el.name}' classes='{string.Join(",", el.GetClasses())}' children={el.childCount}{rot}");
+            for (int i = 0; i < el.childCount; i++)
+                DumpHierarchy(el[i], depth + 1);
         }
 
         private static Vector2 WorldPositionToMinimapPosition(Vector3 position, Bounds bounds, UIMinimap __instance)
         {
             var contentVE = MinimapFields.GetContent(__instance);
             Vector2 vector = new Vector2(
-                (position.x + bounds.center.x) / bounds.size.x,
-                (position.z + bounds.center.z) / bounds.size.z);
+                (bounds.center.x - position.x) / bounds.size.x,
+                (bounds.center.z - position.z) / bounds.size.z);
             Vector2 vector2 = new Vector2(
                 contentVE?.resolvedStyle.width ?? 0,
                 contentVE?.resolvedStyle.height ?? 0);
