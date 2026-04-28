@@ -20,6 +20,9 @@ namespace SceneryChanger.Patches
     {
         static bool? _lastOn;
         static GameObject _arenaLights;
+        static bool _arenaLightsSearched;
+        static AudioSource _cachedCrowdSource;
+        static bool _crowdSourceSearched;
 
         static Type _gameStateType;
         static MethodInfo _phaseGetter;
@@ -83,7 +86,13 @@ namespace SceneryChanger.Patches
             _lastOn = turnOn;
 
             if (_arenaLights == null)
+            {
+                if (_arenaLightsSearched) return;
+                _arenaLightsSearched = true;
                 _arenaLights = ArenaLightUtil.FindArenaLights();
+                if (_arenaLights != null)
+                    ResetCrowdSourceCache();
+            }
 
             if (_arenaLights == null) return;
 
@@ -92,23 +101,35 @@ namespace SceneryChanger.Patches
         }
         public static AudioSource FindGoalCrowdSource()
         {
-            // Look for HockeyArenaRoot -> GoalCrowdNoise
+            if (_cachedCrowdSource != null) return _cachedCrowdSource;
+            if (_crowdSourceSearched) return null;
+            _crowdSourceSearched = true;
+
             var root = UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None)
                              .FirstOrDefault(t => t.name.Contains("HockeyArenaRoot"));
-            if (root == null)
-            {
-                Debug.Log("Could not find arena root");
-                return null;
-            }
+            if (root == null) return null;
 
             var noise = root.GetComponentsInChildren<Transform>(true)
                             .FirstOrDefault(t => t.name == "GoalCrowdNoise");
-            if (noise == null)
-            {
-                Debug.Log("Could not find crowd noise");
-                return null;
-            }
-            return noise.GetComponent<AudioSource>();
+            if (noise == null) return null;
+
+            _cachedCrowdSource = noise.GetComponent<AudioSource>();
+            return _cachedCrowdSource;
+        }
+
+        public static void ResetCaches()
+        {
+            _cachedCrowdSource = null;
+            _crowdSourceSearched = false;
+            _arenaLights = null;
+            _arenaLightsSearched = false;
+            _lastOn = null;
+        }
+
+        public static void ResetCrowdSourceCache()
+        {
+            _cachedCrowdSource = null;
+            _crowdSourceSearched = false;
         }
         
         public static void ToggleCheer(bool on)

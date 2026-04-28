@@ -105,9 +105,6 @@ namespace demsInputControl
             _pingSpikeEndTime = Time.time + durationSeconds;
             InputControlLogger.Log(LogCategory.PracticeModeDetection, $"[PingSpike] Simulating spike of +{extraLatencyMs}ms for {durationSeconds}s");
         }
-        private static readonly MethodInfo handleInputsMethod = typeof(PlayerBody)
-            .GetMethod("HandleInputs", BindingFlags.NonPublic | BindingFlags.Instance);
-
         private static void QueueAllInputs(PlayerInput input)
         {
             bool shouldSimulateLatency = CurrentDelay > 0f && (!ConfigData.Instance.DelayInputs.OnlyInPracticeMode || PracticeModeDetector.IsPracticeMode);
@@ -141,15 +138,6 @@ namespace demsInputControl
                 {
                     input.Client_MoveInputRpc(x, y);
                     input.MoveInput.ClientTick();
-
-                    var body = input.GetComponent<PlayerBody>();
-                    var movement = input.GetComponent<Movement>();
-                    if (body != null && movement != null && movement.Rigidbody != null && handleInputsMethod != null)
-                    {
-                        Vector3 localVel = movement.MovementDirection.InverseTransformVector(movement.Rigidbody.linearVelocity);
-                        if (Mathf.Abs(localVel.z) < 0.05f) // Only invoke when movement has stopped
-                            handleInputsMethod.Invoke(body, null);
-                    }
                 },
                 () => { });
             }
@@ -183,7 +171,7 @@ namespace demsInputControl
                 EnqueueOrApply(() => input.Client_SlideInputRpc(val), () => input.SlideInput.ClientTick());
             }
 
-            if (input.SprintInput.HasChanged && (!SprintControl.IsSprintingBlockedByVelocity || !ConfigData.Instance.ModifySprintControl.AllowModifySprintControl))
+            if (input.SprintInput.HasChanged)
             {
                 InputControlLogger.Log(LogCategory.SprintControl, "Sprint Input Changed");
                 var val = input.SprintInput.ClientValue;

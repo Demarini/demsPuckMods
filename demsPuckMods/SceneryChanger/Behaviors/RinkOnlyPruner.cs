@@ -151,6 +151,7 @@ namespace SceneryLoader.Behaviors
         void OnSceneLoaded(SM.Scene scene, SM.LoadSceneMode mode)
         {
             Debug.Log("Scene Loaded!");
+            SceneryChanger.Patches.Patch_LevelController.ResetCaches();
 
             if (scene.name.Equals("level_default", StringComparison.OrdinalIgnoreCase))
             {

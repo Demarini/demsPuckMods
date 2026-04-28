@@ -126,8 +126,8 @@ namespace SceneryChanger.Patches
 
         static string GetMessageText(ChatMessage chatMessage)
         {
-            var v = Traverse.Create(chatMessage).Property("Content").GetValue<object>()
-                 ?? Traverse.Create(chatMessage).Property("Message").GetValue<object>();
+            var v = Traverse.Create(chatMessage).Field("Content").GetValue<object>()
+                 ?? Traverse.Create(chatMessage).Field("Message").GetValue<object>();
             return (v?.ToString() ?? string.Empty).Trim();
         }
     }
