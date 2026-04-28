@@ -61,64 +61,15 @@ namespace RotateMinimap
         }
     }
 
-    [HarmonyPatch(typeof(UIMinimap), "AddPlayerBody")]
-    public static class PinLocalPlayerIconPatch
-    {
-        static VisualElement pinnedLocalIcon;
-
-        [HarmonyPostfix]
-        public static void Postfix(UIMinimap __instance, object playerBody)
-        {
-            if (playerBody == null) return;
-            var player = Traverse.Create(playerBody).Property("Player").GetValue<Player>();
-            if (player == null || !player.IsLocalPlayer || !ConfigData.Instance.CenterOnPlayer) return;
-
-            var playerMap = Traverse.Create(__instance).Field("playerBodyVisualElementMap").GetValue<object>() as IDictionary;
-            if (playerMap == null || !playerMap.Contains(playerBody)) return;
-
-            var icon = playerMap[playerBody] as VisualElement;
-            if (icon == null) return;
-
-            if (pinnedLocalIcon != null && pinnedLocalIcon != icon)
-            {
-                pinnedLocalIcon.RemoveFromHierarchy();
-                pinnedLocalIcon = null;
-            }
-
-            MinimapFields.EnsureResolved(__instance);
-            var minimapRoot = MinimapFields.GetMinimap(__instance);
-
-            if (minimapRoot != null)
-            {
-                icon.RemoveFromHierarchy();
-                minimapRoot.Add(icon);
-                icon.BringToFront();
-                icon.style.translate = new Translate(0, 0);
-                pinnedLocalIcon = icon;
-            }
-        }
-    }
-
     [HarmonyPatch(typeof(UIMinimap), "Update")]
     public static class RotateMinimapPatch
     {
-        static bool initialized = false;
+        static float _nextLogTime;
 
         [HarmonyPostfix]
         public static void Postfix(UIMinimap __instance)
         {
             MinimapFields.EnsureResolved(__instance);
-
-            if (!initialized)
-            {
-                if (__instance.Team == PlayerTeam.Blue)
-                {
-                    var minimapVE = MinimapFields.GetMinimap(__instance);
-                    if (minimapVE != null)
-                        minimapVE.style.rotate = new Rotate(new Angle(180f, AngleUnit.Degree));
-                }
-                initialized = true;
-            }
 
             var bounds = MinimapFields.GetBounds(__instance);
             if (bounds == null) return;
@@ -126,69 +77,71 @@ namespace RotateMinimap
             var playerMap = Traverse.Create(__instance).Field("playerBodyVisualElementMap").GetValue<object>() as IDictionary;
             if (playerMap == null) return;
 
-            Vector2 centerOffset = Vector2.zero;
+            var minimapVE = MinimapFields.GetMinimap(__instance);
+            var contentVE = MinimapFields.GetContent(__instance);
+            var bgVE = MinimapFields.GetBackground(__instance);
+            var fgVE = MinimapFields.GetForeground(__instance);
+
+            float localRotation = 0f;
+            Vector2 localMinimapPos = Vector2.zero;
+            Vector3 localWorldPos = Vector3.zero;
+            bool foundLocal = false;
 
             foreach (DictionaryEntry entry in playerMap)
             {
-                var key     = entry.Key;
-                var value   = entry.Value as VisualElement;
-                var keyComp = key as Component;
+                var comp = entry.Key as Component;
+                if (comp == null) continue;
+                var player = Traverse.Create(entry.Key).Property("Player").GetValue<Player>();
+                if (player == null || !player.IsLocalPlayer) continue;
 
-                if (keyComp == null || value == null) continue;
+                float eulerY = comp.transform.rotation.eulerAngles.y;
+                localRotation = (__instance.Team == PlayerTeam.Blue) ? eulerY : (eulerY + 180f);
 
-                var keyPlayer = Traverse.Create(key).Property("Player").GetValue<Player>();
-                if (keyPlayer == null) return;
-
-                float rotY = keyComp.transform.rotation.eulerAngles.y;
-                float value2 = (__instance.Team == PlayerTeam.Blue) ? rotY : (rotY + 180f);
-
-                var minimapVE = MinimapFields.GetMinimap(__instance);
+                localWorldPos = comp.transform.position;
                 Vector3 position = (__instance.Team == PlayerTeam.Blue)
-                    ? keyComp.transform.position
-                    : -keyComp.transform.position;
+                    ? comp.transform.position
+                    : -comp.transform.position;
+                localMinimapPos = WorldPositionToMinimapPosition(position, bounds.Value, __instance);
+                foundLocal = true;
+                break;
+            }
 
-                Vector2 vector = WorldPositionToMinimapPosition(position, bounds.Value, __instance);
+            if (!foundLocal) return;
 
-                if (keyPlayer.IsLocalPlayer)
-                {
-                    centerOffset = vector;
-                    var contentVE = MinimapFields.GetContent(__instance);
-                    var bgVE     = MinimapFields.GetBackground(__instance);
+            float mapRotation = -localRotation + 180f;
+            if (minimapVE != null)
+                minimapVE.style.rotate = new Rotate(mapRotation);
 
-                    if (ConfigData.Instance.CenterOnPlayer)
-                    {
-                        if (contentVE != null) contentVE.style.translate = new Translate(centerOffset.x, -centerOffset.y);
-                        if (bgVE != null) bgVE.style.translate = new Translate(centerOffset.x, -centerOffset.y);
-                        value.style.translate = new Translate(0, 0);
-                    }
+            if (ConfigData.Instance.CenterOnPlayer)
+            {
+                var shift = new Translate(localMinimapPos.x, -localMinimapPos.y);
+                if (contentVE != null) contentVE.style.translate = shift;
+                if (bgVE != null) bgVE.style.translate = shift;
+                if (fgVE != null) fgVE.style.translate = shift;
+            }
 
-                    if (minimapVE != null)
-                        minimapVE.style.rotate = new Rotate(-value2 + 180f);
+            foreach (DictionaryEntry entry in playerMap)
+            {
+                var ve = entry.Value as VisualElement;
+                if (ve == null) continue;
+                var player = Traverse.Create(entry.Key).Property("Player").GetValue<Player>();
+                if (player == null || player.IsLocalPlayer) continue;
 
-                    foreach (DictionaryEntry entry2 in playerMap)
-                    {
-                        var key2     = entry2.Key;
-                        var value3   = entry2.Value as VisualElement;
-                        if (value3 == null) continue;
+                Label numberLabel = ve.Query<Label>("NumberLabel").First();
+                if (numberLabel != null)
+                    numberLabel.style.rotate = new Rotate(localRotation - 180f);
+            }
 
-                        var key2Player = Traverse.Create(key2).Property("Player").GetValue<Player>();
-                        if (key2Player == null || key2Player.IsLocalPlayer) continue;
-
-                        Label numberLabel = value3.Query<Label>("NumberLabel").First();
-                        if (numberLabel == null)
-                            numberLabel = value3.Query<Label>("Number").First();
-                        if (numberLabel != null)
-                            numberLabel.style.rotate = new Rotate(value2 + 180f);
-                    }
-                }
-                else
-                {
-                    if (ConfigData.Instance.CenterOnPlayer)
-                    {
-                        Vector2 adjusted = vector - centerOffset;
-                        value.style.translate = new Translate(-adjusted.x, adjusted.y);
-                    }
-                }
+            if (Time.time >= _nextLogTime)
+            {
+                _nextLogTime = Time.time + 2f;
+                Debug.Log($"[RotateMinimap] Team={__instance.Team} CenterOnPlayer={ConfigData.Instance.CenterOnPlayer}");
+                Debug.Log($"[RotateMinimap] WorldPos={localWorldPos} MinimapPos={localMinimapPos} EulerY={localRotation:F1} MapRot={mapRotation:F1}");
+                if (contentVE != null)
+                    Debug.Log($"[RotateMinimap] ContentSize=({contentVE.resolvedStyle.width:F0},{contentVE.resolvedStyle.height:F0}) ContentTranslate=({localMinimapPos.x:F1},{(-localMinimapPos.y):F1})");
+                if (minimapVE != null)
+                    Debug.Log($"[RotateMinimap] MinimapSize=({minimapVE.resolvedStyle.width:F0},{minimapVE.resolvedStyle.height:F0})");
+                Debug.Log($"[RotateMinimap] Bounds center={bounds.Value.center} size={bounds.Value.size}");
             }
         }
 

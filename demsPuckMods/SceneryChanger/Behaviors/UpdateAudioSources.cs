@@ -62,6 +62,9 @@ namespace SceneryChanger.Behaviors
 
         void Update()
         {
+            var nm = Unity.Netcode.NetworkManager.Singleton;
+            if (nm == null || !nm.IsClient) return;
+
             float now = Time.time;
             if (now < _nextUpdateAt) return;
             _nextUpdateAt = now + updateInterval;
