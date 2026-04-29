@@ -48,11 +48,11 @@ namespace RotateMinimap
             if (icon == null) return true;
 
             MinimapFields.EnsureResolved(__instance);
-            var minimapRoot = MinimapFields.GetMinimap(__instance);
+            var contentVE = MinimapFields.GetContent(__instance);
 
-            if (minimapRoot != null && icon.parent == minimapRoot)
+            if (contentVE != null && icon.parent != contentVE)
             {
-                minimapRoot.Remove(icon);
+                icon.parent?.Remove(icon);
                 playerMap.Remove(playerBody);
                 return false;
             }
@@ -65,7 +65,6 @@ namespace RotateMinimap
     public static class RotateMinimapPatch
     {
         static float _nextLogTime;
-        static bool _hierarchyDumped;
 
         [HarmonyPostfix]
         public static void Postfix(UIMinimap __instance)
@@ -87,6 +86,7 @@ namespace RotateMinimap
             Vector2 localMinimapPos = Vector2.zero;
             Vector3 localWorldPos = Vector3.zero;
             bool foundLocal = false;
+            VisualElement localIconVE = null;
 
             foreach (DictionaryEntry entry in playerMap)
             {
@@ -103,6 +103,7 @@ namespace RotateMinimap
                     ? comp.transform.position
                     : -comp.transform.position;
                 localMinimapPos = WorldPositionToMinimapPosition(position, bounds.Value, __instance);
+                localIconVE = entry.Value as VisualElement;
                 foundLocal = true;
                 break;
             }
@@ -113,13 +114,7 @@ namespace RotateMinimap
             if (minimapVE != null)
                 minimapVE.style.rotate = new Rotate(mapRotation);
 
-            if (ConfigData.Instance.CenterOnPlayer)
-            {
-                var shift = new Translate(localMinimapPos.x, -localMinimapPos.y);
-                if (contentVE != null) contentVE.style.translate = shift;
-                if (bgVE != null) bgVE.style.translate = shift;
-                if (fgVE != null) fgVE.style.translate = shift;
-            }
+            // centerOnPlayer is shelved for now — always use non-centered mode
 
             foreach (DictionaryEntry entry in playerMap)
             {
@@ -138,19 +133,9 @@ namespace RotateMinimap
             if (Time.time >= _nextLogTime)
             {
                 _nextLogTime = Time.time + 2f;
-                Debug.Log($"[RotateMinimap] Team={__instance.Team} CenterOnPlayer={ConfigData.Instance.CenterOnPlayer}");
-                Debug.Log($"[RotateMinimap] MapRot={mapRotation:F1} EulerY={localRotation:F1}");
+                Debug.Log($"[RotateMinimap] Team={__instance.Team} MapRot={mapRotation:F1} EulerY={localRotation:F1}");
                 Debug.Log($"[RotateMinimap] WorldPos={localWorldPos} MinimapPos={localMinimapPos}");
             }
-        }
-
-        private static void DumpHierarchy(VisualElement el, int depth)
-        {
-            string indent = new string(' ', depth * 2);
-            string rot = el.resolvedStyle.rotate.angle.value != 0 ? $" rot={el.resolvedStyle.rotate.angle.value:F0}" : "";
-            Debug.Log($"[RotateMinimap] {indent}<{el.GetType().Name}> name='{el.name}' classes='{string.Join(",", el.GetClasses())}' children={el.childCount}{rot}");
-            for (int i = 0; i < el.childCount; i++)
-                DumpHierarchy(el[i], depth + 1);
         }
 
         private static Vector2 WorldPositionToMinimapPosition(Vector3 position, Bounds bounds, UIMinimap __instance)
