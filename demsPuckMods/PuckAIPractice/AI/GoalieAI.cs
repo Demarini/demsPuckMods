@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Unity.Mathematics.Geometry;
+using Unity.Netcode;
 using UnityEngine;
 using PuckAIPractice.Singletons;
 using PuckAIPractice.Utilities;
@@ -20,7 +21,7 @@ namespace PuckAIPractice.AI
         private float lastDashStartTime = -Mathf.Infinity;
         private float lastDashTime = -Mathf.Infinity;
         private bool dashLeftNext = true;
-        private PlayerBodyV2 body;
+        private PlayerBody body;
         private Vector3? targetCancelPosition = null;
         private float cancelInterpSpeed = 20f; // tweak this value to control smoothness
         private bool isPreparingDash = false;
@@ -82,7 +83,7 @@ namespace PuckAIPractice.AI
         }
         public Puck GetClosestPuck(Vector3 position, bool includeReplay = false)
         {
-            List<Puck> pucks = NetworkBehaviourSingleton<PuckManager>.Instance.GetPucks(false);
+            List<Puck> pucks = PuckManager.Instance.GetPucks(false);
             var pucksToSearch = includeReplay ? pucks : pucks.Where(puck => !puck.IsReplay.Value).ToList();
             Puck closestPuck = null;
             float closestDistance = float.MaxValue;
@@ -110,7 +111,7 @@ namespace PuckAIPractice.AI
             else
             {
                 //Debug.Log("Looping All Pucks");
-                Puck puck = GetClosestPuck(controlledPlayer.Team.Value == PlayerTeam.Blue ? blueGoal : redGoal, false);
+                Puck puck = GetClosestPuck(controlledPlayer.Team == PlayerTeam.Blue ? blueGoal : redGoal, false);
                 if(puck != null)
                 {
                     //Debug.Log("Found Puck!");
@@ -119,7 +120,7 @@ namespace PuckAIPractice.AI
                 else
                 {
                     //Debug.Log("Game Started?");
-                    Puck puck2 = NetworkBehaviourSingleton<PuckManager>.Instance.GetPuck(false);
+                    Puck puck2 = PuckManager.Instance.GetPuck(false);
                     if(puck2 == null)
                     {
                        //Debug.Log("No puck found return");
@@ -145,16 +146,16 @@ namespace PuckAIPractice.AI
             Vector3 toPuck = puckPos - goaliePos;
             toPuck.y = 0f;
           
-            Vector3 goalCenter = (controlledPlayer.Team.Value == PlayerTeam.Red) ? redGoal : blueGoal;
+            Vector3 goalCenter = (controlledPlayer.Team == PlayerTeam.Red) ? redGoal : blueGoal;
             Vector3 goalieToPuck = puckPos - goaliePos;
             Vector3 goalieForward = neutralForward;
             Vector3 netToPuck = puckPos - goalCenter;
-            Vector3 netForward = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.back : Vector3.forward;
+            Vector3 netForward = (controlledPlayer.Team == PlayerTeam.Red) ? Vector3.back : Vector3.forward;
             float forwardDot = Vector3.Dot(neutralForward, netToPuck.normalized);
             //Debug.Log("Got To Check Behind Net");
             if(forwardDot < .5f)
             {
-                if(controlledPlayer.Team.Value == PlayerTeam.Red)
+                if(controlledPlayer.Team == PlayerTeam.Red)
                 {
                     SimulateDashHelper.IsBehindNetRed = true;
                 }
@@ -165,7 +166,7 @@ namespace PuckAIPractice.AI
             }
             else
             {
-                if (controlledPlayer.Team.Value == PlayerTeam.Red)
+                if (controlledPlayer.Team == PlayerTeam.Red)
                 {
                     SimulateDashHelper.IsBehindNetRed = false;
                 }
@@ -174,11 +175,11 @@ namespace PuckAIPractice.AI
                     SimulateDashHelper.IsBehindNetBlue = false;
                 }
             }
-            GoalieSettings instance = controlledPlayer.Team.Value == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
+            GoalieSettings instance = controlledPlayer.Team == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
             float maxAngleThisFrame = instance.MaxRotationAngle;
 
             // Skip flattening if puck is behind net
-            Vector3 goalRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right;
+            Vector3 goalRight = (controlledPlayer.Team == PlayerTeam.Red) ? Vector3.left : Vector3.right;
             bool isBehindNet = forwardDot < 0.5f;
             if (!isBehindNet)
             {
@@ -196,7 +197,7 @@ namespace PuckAIPractice.AI
             Color dotColor = (forwardDot >= 0.5f) ? Color.green : Color.red;
             //UpdateArrow(netForwardArrow, goalCenter, goalCenter + neutralForward * 4f, dotColor); // Green = Goalie forward
             Vector3 projectedPoint = GetProjectedInterceptClamped(goaliePos, puckPos, goalCenter, forwardDot, out float signedLateralOffset, out float lateralDistance, out Vector3 puckToGoalDir);
-            if (controlledPlayer.Team.Value == PlayerTeam.Red)
+            if (controlledPlayer.Team == PlayerTeam.Red)
             {
                 SimulateDashHelper.ProjectedPointRed = projectedPoint;
             }
@@ -206,7 +207,7 @@ namespace PuckAIPractice.AI
             }
             
             //Debug.Log("Projected Point: " + projectedPoint);
-            if (controlledPlayer.Team.Value == PlayerTeam.Red)
+            if (controlledPlayer.Team == PlayerTeam.Red)
             {
                 SimulateDashHelper.SignedLateralOffsetRed = signedLateralOffset;
             }
@@ -224,13 +225,13 @@ namespace PuckAIPractice.AI
         }
         private void ResolvePuckReference()
         {
-            var puck = NetworkBehaviourSingleton<PuckManager>.Instance.GetPlayerPuck(NetworkBehaviourSingleton<PuckManager>.Instance.OwnerClientId);
+            var puck = PuckManager.Instance.GetPlayerPuck(NetworkManager.Singleton.LocalClientId);
             if (puck != null) puckTransform = puck.transform;
         }
         private void InitializeBody()
         {
             if (body != null) return;
-            body = controlledPlayer.GetComponent<PlayerBodyV2>();
+            body = controlledPlayer.GetComponent<PlayerBody>();
         }
 
         private void InitializeInterceptVisuals()
@@ -250,13 +251,13 @@ namespace PuckAIPractice.AI
         private Quaternion GetNeutralRotation()
         {
             return Quaternion.LookRotation(
-                controlledPlayer.Team.Value == PlayerTeam.Red ? Vector3.forward : Vector3.back,
+                controlledPlayer.Team == PlayerTeam.Red ? Vector3.forward : Vector3.back,
                 Vector3.up);
         }
 
         private Vector3 GetNeutralForward()
         {
-            return controlledPlayer.Team.Value == PlayerTeam.Red ? Vector3.forward : Vector3.back;
+            return controlledPlayer.Team == PlayerTeam.Red ? Vector3.forward : Vector3.back;
         }
 
         private void RotateTowardPuck(
@@ -267,7 +268,7 @@ namespace PuckAIPractice.AI
     Vector3 goalCenter,
     Vector3 goalRight)
         {
-            GoalieSettings instance = controlledPlayer.Team.Value == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
+            GoalieSettings instance = controlledPlayer.Team == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
             if (isBehindNet)
             {
                 // Puck is behind the net — figure out which post to pin to (based on net center)
@@ -343,16 +344,16 @@ namespace PuckAIPractice.AI
     out Vector3 puckToGoalDir)
         {
             const float maxLateral = 3.5f;
-            GoalieSettings instance = controlledPlayer.Team.Value == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
+            GoalieSettings instance = controlledPlayer.Team == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
             // Use same frame as puckToGoalRight from front-of-net mode
             Vector3 puckToGoal = goalCenter - puckPos;
             puckToGoalDir = puckToGoal.normalized;
             Vector3 puckToGoalRight = Vector3.Cross(Vector3.up, puckToGoalDir);
-            Vector3 goalRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right; // now used consistently in both modes
+            Vector3 goalRight = (controlledPlayer.Team == PlayerTeam.Red) ? Vector3.left : Vector3.right; // now used consistently in both modes
             // If puck is behind the goalie or in a steep angle, lock to post
             if (forwardDot < 0.5f)
             {
-                //Vector3 goalRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right;
+                //Vector3 goalRight = (controlledPlayer.Team == PlayerTeam.Red) ? Vector3.left : Vector3.right;
                 Vector3 sideVec = puckPos - goalCenter;
                 float side = Vector3.Dot(sideVec, goalRight); // Which side of the net
 
@@ -363,7 +364,7 @@ namespace PuckAIPractice.AI
                 Vector3 anchor = goalCenter + goalRight * Mathf.Sign(side) * postOffset;
 
                 // Now pull the anchor forward out of the net
-                anchor.z += (controlledPlayer.Team.Value == PlayerTeam.Red ? -goalieDepth : goalieDepth);
+                anchor.z += (controlledPlayer.Team == PlayerTeam.Red ? -goalieDepth : goalieDepth);
 
                 // Flatten anchor
                 anchor.y = goaliePos.y;
@@ -443,7 +444,7 @@ namespace PuckAIPractice.AI
 
         private void HandleDashLogic(Vector3 toPuck, Quaternion neutralRotation, float lateralDistance, float signedLateralOffset, Vector3 projectedPoint)
         {
-            GoalieSettings instance = controlledPlayer.Team.Value == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
+            GoalieSettings instance = controlledPlayer.Team == PlayerTeam.Red ? GoalieSettings.InstanceRed : GoalieSettings.InstanceBlue;
             bool cooldownActive = Time.time < lastDashTime + instance.DashCooldown;
             bool gracePeriodActive = Time.time < lastDashStartTime + instance.DashCancelGrace;
 
@@ -453,7 +454,7 @@ namespace PuckAIPractice.AI
             if (!cooldownActive && lateralDistance > instance.DashThreshold && !isPreparingDash)
             {
                 Vector3 dashDir = signedLateralOffset < 0 ? Vector3.left : Vector3.right;
-                Vector3 teamRight = (controlledPlayer.Team.Value == PlayerTeam.Red) ? Vector3.left : Vector3.right;
+                Vector3 teamRight = (controlledPlayer.Team == PlayerTeam.Red) ? Vector3.left : Vector3.right;
                 Vector3 dashWorldDir = teamRight * Mathf.Sign(signedLateralOffset);
 
                 pendingDashDir = dashWorldDir;   
@@ -481,7 +482,7 @@ namespace PuckAIPractice.AI
                 if (angle <= dashReadyThreshold)
                 {
                     // Now dash in correct direction
-                    if ((pendingDashDir.x < 0 && controlledPlayer.Team.Value == PlayerTeam.Red) || (pendingDashDir.x >= 0 && controlledPlayer.Team.Value == PlayerTeam.Blue))
+                    if ((pendingDashDir.x < 0 && controlledPlayer.Team == PlayerTeam.Red) || (pendingDashDir.x >= 0 && controlledPlayer.Team == PlayerTeam.Blue))
                     {
                         //Debug.Log($"{controlledPlayer.Username.Value} Dashed Left");
                         controlledPlayer.PlayerInput.Client_DashLeftInputRpc();

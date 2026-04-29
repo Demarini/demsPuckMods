@@ -27,7 +27,7 @@ namespace PuckAIPractice.Patches
 
             public bool IsDashing;
         }
-        public static bool SimulateDash(PlayerBodyV2 __instance, Vector3 dashDir)
+        public static bool SimulateDash(PlayerBody __instance, Vector3 dashDir)
         {
             var state = __instance.GetComponent<SimulateDashState>() ??
                         __instance.gameObject.AddComponent<SimulateDashState>();
@@ -43,7 +43,7 @@ namespace PuckAIPractice.Patches
             }
 
             state.IsDashing = true;
-            float stamina = __instance.Stamina;
+            float stamina = __instance.Stamina.Value;
             float dashStaminaDrain = traverse.Field("dashStaminaDrain").GetValue<float>();
 
             Rigidbody rb = __instance.Rigidbody;
@@ -88,7 +88,7 @@ namespace PuckAIPractice.Patches
 
             return true;
         }
-        private static readonly MethodInfo updateAudioMethod = typeof(PlayerBodyV2)
+        private static readonly MethodInfo updateAudioMethod = typeof(PlayerBody)
     .GetMethod("Server_UpdateAudio", BindingFlags.Instance | BindingFlags.NonPublic);
         static Vector3 redNetCenter = new Vector3(0.0f, 0.8f, -40.23f);
         static Vector3 blueNetCenter = new Vector3(0.0f, 0.8f, 40.23f);
@@ -99,7 +99,7 @@ namespace PuckAIPractice.Patches
         public static float SignedLateralOffsetBlue;
         public static Vector3 ProjectedPointRed;
         public static Vector3 ProjectedPointBlue;
-        private static IEnumerator MoveFakePlayer(PlayerBodyV2 body, Vector3 target, float duration)
+        private static IEnumerator MoveFakePlayer(PlayerBody body, Vector3 target, float duration)
         {
             //Debug.Log("Starting Move Faker Player");
             const float slideTurnMultiplier = 2f;
@@ -122,7 +122,7 @@ namespace PuckAIPractice.Patches
             body.HasSlipped = true;
             body.HasFallen = false;
             //body.Rigidbody.velocity = (target - start).normalized * 5f;
-            body.Speed = body.Movement.Speed; // Set manually if Movement.Speed is spoofed
+            body.Speed.Value = body.Movement.Speed;
 
             body.Movement.Sprint = body.IsSprinting.Value;
             body.Movement.TurnMultiplier = body.IsSliding.Value ? slideTurnMultiplier :
@@ -148,11 +148,11 @@ namespace PuckAIPractice.Patches
             updateAudioMethod?.Invoke(body, null);
             GoalieAI goalieAI = body.GetComponent<GoalieAI>();
             Vector3 lastPosition = start;
-            //Debug.Log("Target Position: " + (body.Player.Team.Value == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue));
+            //Debug.Log("Target Position: " + (body.Player.Team == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue));
             //Debug.Log("Last Position: " + lastPosition);
             while (elapsed < duration && state.IsDashing)
             {
-                Vector3 netPos = body.Player.Team.Value == PlayerTeam.Red ? redNetCenter : blueNetCenter;
+                Vector3 netPos = body.Player.Team == PlayerTeam.Red ? redNetCenter : blueNetCenter;
                 Vector3 pos = body.transform.position;
                 positionHistory.Add(pos);
                 if (positionHistory.Count > maxHistoryFrames)
@@ -164,10 +164,10 @@ namespace PuckAIPractice.Patches
                 {
                     historyMoveDir = (pos - positionHistory[0]).normalized;
                 }
-                float prevDist = Vector3.Distance(start, (body.Player.Team.Value == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue));
+                float prevDist = Vector3.Distance(start, (body.Player.Team == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue));
                 pos.y = 0f;
                 //Debug.Log("Current Position: " + pos);
-                if(body.Player.Team.Value == PlayerTeam.Red)
+                if(body.Player.Team == PlayerTeam.Red)
                 {
                     ProjectedPointRed.y = 0f;
                 }
@@ -180,13 +180,13 @@ namespace PuckAIPractice.Patches
                 elapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(elapsed / duration); // ⬅️ this must come *before* using `t`
 
-                Vector3 toTarget = ((body.Player.Team.Value == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue) - pos).normalized;
+                Vector3 toTarget = ((body.Player.Team == PlayerTeam.Red ? ProjectedPointRed : ProjectedPointBlue) - pos).normalized;
                 float alignment = Vector3.Dot(historyMoveDir, toTarget);
-                //debug.log($"[MoveFakePlayer] isBehindNet = {(body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed: IsBehindNetBlue)}, signedOffset = {(body.Player.Team.Value == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue)}, moveDir = {moveDir}");
-                if ((body.Player.Team.Value == PlayerTeam.Red ? IsBehindNetRed : IsBehindNetBlue))
+                //debug.log($"[MoveFakePlayer] isBehindNet = {(body.Player.Team == PlayerTeam.Red ? IsBehindNetRed: IsBehindNetBlue)}, signedOffset = {(body.Player.Team == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue)}, moveDir = {moveDir}");
+                if ((body.Player.Team == PlayerTeam.Red ? IsBehindNetRed : IsBehindNetBlue))
                 {
-                    Vector3 goalRight = body.Player.Team.Value == PlayerTeam.Red ? Vector3.left : Vector3.right;
-                    float signedOffset = body.Player.Team.Value == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue;
+                    Vector3 goalRight = body.Player.Team == PlayerTeam.Red ? Vector3.left : Vector3.right;
+                    float signedOffset = body.Player.Team == PlayerTeam.Red ? SignedLateralOffsetRed : SignedLateralOffsetBlue;
 
                     // Only run if we're actually moving
                     if (historyMoveDir.sqrMagnitude > 0.001f)
@@ -236,7 +236,7 @@ namespace PuckAIPractice.Patches
     {
         static bool Prefix(Movement __instance)
         {
-            var playerBody = __instance.GetComponent<PlayerBodyV2>();
+            var playerBody = __instance.GetComponent<PlayerBody>();
             if (playerBody != null && FakePlayerRegistry.IsFake(__instance.PlayerBody.Player))
             {
                 return false; // skip FixedUpdate entirely
@@ -244,11 +244,11 @@ namespace PuckAIPractice.Patches
             return true; // continue original method
         }
     }
-    [HarmonyPatch(typeof(PlayerBodyV2), "DashRight")]
+    [HarmonyPatch(typeof(PlayerBody), "DashRight")]
     public static class DashRightSimPatch
     {
         [HarmonyPrefix]
-        public static bool Prefix(PlayerBodyV2 __instance)
+        public static bool Prefix(PlayerBody __instance)
         {
             //debug.log(__instance.Player.OwnerClientId);
             if (!NetworkManager.Singleton.IsServer || !FakePlayerRegistry.IsFake(__instance.Player))
@@ -265,11 +265,11 @@ namespace PuckAIPractice.Patches
             return !SimulateDash(__instance, __instance.transform.right);
         }
     }
-    [HarmonyPatch(typeof(PlayerBodyV2), "DashLeft")]
+    [HarmonyPatch(typeof(PlayerBody), "DashLeft")]
     public static class DashLeftSimPatch
     {
         [HarmonyPrefix]
-        public static bool Prefix(PlayerBodyV2 __instance)
+        public static bool Prefix(PlayerBody __instance)
         {
             if (!NetworkManager.Singleton.IsServer || !FakePlayerRegistry.IsFake(__instance.Player))
             {
@@ -286,11 +286,11 @@ namespace PuckAIPractice.Patches
             return !SimulateDash(__instance, -__instance.transform.right);
         }
     }
-    [HarmonyPatch(typeof(PlayerBodyV2), "CancelDash")]
+    [HarmonyPatch(typeof(PlayerBody), "CancelDash")]
     public static class CancelDashSimPatch
     {
         [HarmonyPrefix]
-        public static bool Prefix(PlayerBodyV2 __instance)
+        public static bool Prefix(PlayerBody __instance)
         {
             if (!NetworkManager.Singleton.IsServer)
                 return false;
@@ -343,11 +343,11 @@ namespace PuckAIPractice.Patches
         }
     }
 
-    [HarmonyPatch(typeof(PlayerBodyV2), "FixedUpdate")]
-    public static class PlayerBodyV2_FixedUpdate_Patch
+    [HarmonyPatch(typeof(PlayerBody), "FixedUpdate")]
+    public static class PlayerBody_FixedUpdate_Patch
     {
         [HarmonyPrefix]
-        public static bool Prefix(PlayerBodyV2 __instance)
+        public static bool Prefix(PlayerBody __instance)
         {
             if (FakePlayerRegistry.IsFake(__instance.Player))
             {
@@ -358,7 +358,7 @@ namespace PuckAIPractice.Patches
             return true; // allow original to run
         }
 
-        private static void RunCustomFixedUpdate(PlayerBodyV2 __instance)
+        private static void RunCustomFixedUpdate(PlayerBody __instance)
         {
             if (!__instance.Player)
                 return;
@@ -482,7 +482,7 @@ namespace PuckAIPractice.Patches
             //    __instance.HasSlipped = true;
             //    __instance.HasFallen = false;
             // private method, invoke manually
-            var audioMethod = typeof(PlayerBodyV2).GetMethod("Server_UpdateAudio", BindingFlags.Instance | BindingFlags.NonPublic);
+            var audioMethod = typeof(PlayerBody).GetMethod("Server_UpdateAudio", BindingFlags.Instance | BindingFlags.NonPublic);
             audioMethod?.Invoke(__instance, null);
         }
     }

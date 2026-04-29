@@ -25,8 +25,8 @@ namespace PuckAIPractice
                         OwnerClientId = player.OwnerClientId,
                         Position = player.PlayerBody.transform.position,
                         Rotation = player.PlayerBody.transform.rotation,
-                        Stamina = player.PlayerBody.StaminaCompressed.Value,
-                        Speed = player.PlayerBody.StaminaCompressed.Value,
+                        Stamina = player.PlayerBody.Stamina.Value,
+                        Speed = player.PlayerBody.Speed.Value,
                         IsSprinting = player.PlayerBody.IsSprinting.Value,
                         IsSliding = player.PlayerBody.IsSliding.Value,
                         IsStopping = player.PlayerBody.IsStopping.Value,
@@ -87,7 +87,7 @@ namespace PuckAIPractice
     // Step 1: Block bot player-spawned events from being written mid-recording.
     // Bots are injected at recording-start instead (see above), so mid-recording
     // events would create a second entry and cause the duplicate-goalie bug.
-    [HarmonyPatch(typeof(ReplayRecorderController), "Event_OnPlayerSpawned")]
+    [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnPlayerSpawned")]
     static class BlockFakeBotPlayerSpawned
     {
         static bool Prefix(Dictionary<string, object> message)
@@ -97,17 +97,17 @@ namespace PuckAIPractice
         }
     }
 
-    [HarmonyPatch(typeof(ReplayRecorderController), "Event_OnPlayerBodySpawned")]
+    [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnPlayerBodySpawned")]
     static class BlockFakeBotPlayerBodySpawned
     {
         static bool Prefix(Dictionary<string, object> message)
         {
-            var playerBody = (PlayerBodyV2)message["playerBody"];
+            var playerBody = (PlayerBody)message["playerBody"];
             return playerBody == null || !FakePlayerRegistry.IsFake(playerBody.Player);
         }
     }
 
-    [HarmonyPatch(typeof(ReplayRecorderController), "Event_OnStickSpawned")]
+    [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnStickSpawned")]
     static class BlockFakeBotStickSpawned
     {
         static bool Prefix(Dictionary<string, object> message)

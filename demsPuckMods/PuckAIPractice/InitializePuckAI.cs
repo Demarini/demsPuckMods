@@ -26,7 +26,7 @@ namespace PuckAIPractice
             try
             {
                 GoalieRunner.Initialize();
-                ModConfig.Initialize();
+                PuckAIPractice.Config.ModConfig.Initialize();
                 DetectPositions.Create();
                 ConfigData.Load();
                 Goalies.GoaliesAreRunning = true;

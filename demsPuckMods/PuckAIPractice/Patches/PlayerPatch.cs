@@ -106,11 +106,11 @@ namespace PuckAIPractice.Patches
         //        }
         //    }
         //}
-        //[HarmonyPatch(typeof(PlayerBodyV2), nameof(PlayerBodyV2.UpdateMesh))]
-        //public static class PlayerBodyV2_UpdateMesh_Patch
+        //[HarmonyPatch(typeof(PlayerBody), nameof(PlayerBody.UpdateMesh))]
+        //public static class PlayerBody_UpdateMesh_Patch
         //{
         //    // Return false to skip the original UpdateMesh entirely
-        //    static bool Prefix(PlayerBodyV2 __instance)
+        //    static bool Prefix(PlayerBody __instance)
         //    {
         //        if (!PracticeModeDetector.IsPracticeMode && !NetworkManager.Singleton.IsServer)
         //        {
@@ -126,7 +126,7 @@ namespace PuckAIPractice.Patches
         //        var playerMeshObj = instTr.Field("playerMesh").GetValue();
         //        if (playerMeshObj == null)
         //        {
-        //            //Debug.LogWarning("[Patch] PlayerBodyV2.UpdateMesh: playerMesh was null");
+        //            //Debug.LogWarning("[Patch] PlayerBody.UpdateMesh: playerMesh was null");
         //            return false;
         //        }
 
@@ -157,7 +157,7 @@ namespace PuckAIPractice.Patches
         //        }
         //        else
         //        {
-        //            //Debug.LogWarning("[Patch] PlayerBodyV2.UpdateMesh: PlayerHead was null");
+        //            //Debug.LogWarning("[Patch] PlayerBody.UpdateMesh: PlayerHead was null");
         //        }
         //        //Debug.Log($"Player Count: {PlayerManager.Instance.GetPlayers(false).Count}");
         //        UIScoreboard.Instance.UpdateServer(NetworkBehaviourSingleton<ServerManager>.Instance.Server, NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayers(false).Count);
