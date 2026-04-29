@@ -130,7 +130,7 @@ namespace ModifyMinimapIcons
                 if (texture != null) body.style.backgroundImage = new StyleBackground(texture);
 
                 bool isLocal = (playerBodyObj == localPlayerObj);
-                PlayerTeam targetTeam = player.Team.Value;
+                PlayerTeam targetTeam = player.Team;
                 float finalScale = 1f;
 
                 if (isLocal)

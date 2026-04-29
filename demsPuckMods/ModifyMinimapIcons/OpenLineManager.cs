@@ -9,7 +9,7 @@ namespace ModifyMinimapIcons
 {
     public static class OpenLineManager
     {
-        private static Dictionary<PlayerBodyV2, LineRenderer> activeLines = new Dictionary<PlayerBodyV2, LineRenderer>();
+        private static Dictionary<PlayerBody, LineRenderer> activeLines = new Dictionary<PlayerBody, LineRenderer>();
         private static Material lineMaterial;
 
         public static void Init()
@@ -33,7 +33,7 @@ namespace ModifyMinimapIcons
             return lr;
         }
 
-        public static void UpdateLine(PlayerBodyV2 localPlayer, PlayerBodyV2 teammate)
+        public static void UpdateLine(PlayerBody localPlayer, PlayerBody teammate)
         {
             if (!activeLines.TryGetValue(teammate, out var lr))
             {
@@ -46,7 +46,7 @@ namespace ModifyMinimapIcons
             lr.SetPosition(1, teammate.transform.position + Vector3.up * 0.5f);
         }
 
-        public static void HideLine(PlayerBodyV2 teammate)
+        public static void HideLine(PlayerBody teammate)
         {
             if (activeLines.TryGetValue(teammate, out var lr))
             {

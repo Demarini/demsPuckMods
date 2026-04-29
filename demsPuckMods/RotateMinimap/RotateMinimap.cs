@@ -110,7 +110,7 @@ namespace RotateMinimap
 
             if (!foundLocal) return;
 
-            float mapRotation = -localRotation;
+            float mapRotation = -localRotation + 180f;
             if (minimapVE != null)
                 minimapVE.style.rotate = new Rotate(mapRotation);
 
@@ -126,7 +126,7 @@ namespace RotateMinimap
                 {
                     Label numberLabel = ve.Query<Label>("NumberLabel").First();
                     if (numberLabel != null)
-                        numberLabel.style.rotate = new Rotate(localRotation);
+                        numberLabel.style.rotate = new Rotate(localRotation - 180f);
                 }
             }
 
