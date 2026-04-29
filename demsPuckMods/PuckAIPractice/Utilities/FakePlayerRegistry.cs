@@ -8,6 +8,17 @@ namespace PuckAIPractice.Utilities
     {
         private static readonly HashSet<Player> fakePlayers = new HashSet<Player>();
         private static readonly Dictionary<Player, PlayerTeam> fakePlayerTeams = new Dictionary<Player, PlayerTeam>();
+        private static readonly HashSet<ulong> fakeClientIds = new HashSet<ulong>();
+
+        public static void ReserveFakeClientId(ulong clientId)
+        {
+            fakeClientIds.Add(clientId);
+        }
+
+        public static bool IsFakeClientId(ulong clientId)
+        {
+            return fakeClientIds.Contains(clientId);
+        }
 
         public static void Register(Player player, PlayerTeam team)
         {
@@ -43,6 +54,7 @@ namespace PuckAIPractice.Utilities
         {
             fakePlayers.Clear();
             fakePlayerTeams.Clear();
+            fakeClientIds.Clear();
         }
 
         public static bool IsFake(Player player)

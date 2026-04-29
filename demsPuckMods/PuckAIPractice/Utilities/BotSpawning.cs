@@ -49,6 +49,7 @@ namespace PuckAIPractice.Utilities
 
             ulong fakeClientId = 7777777UL + (ulong)(team == PlayerTeam.Red ? 1 : 0);
             botIndex++;
+            FakePlayerRegistry.ReserveFakeClientId(fakeClientId);
             netObj.SpawnWithOwnership(fakeClientId, true);
 
             var player = playerObj.GetComponent<Player>();
@@ -115,6 +116,7 @@ namespace PuckAIPractice.Utilities
 
             ulong fakeClientId = 7777777UL + (ulong)(team == PlayerTeam.Red ? 1 : 0);
             botIndex++;
+            FakePlayerRegistry.ReserveFakeClientId(fakeClientId);
             netObj.SpawnWithOwnership(fakeClientId, true);
 
             var player = playerObj.GetComponent<Player>();

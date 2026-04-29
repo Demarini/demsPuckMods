@@ -12,6 +12,20 @@ using UnityEngine;
 
 namespace PuckAIPractice.Patches
 {
+    [HarmonyPatch(typeof(PlayerManager), nameof(PlayerManager.AddPlayer))]
+    public static class PlayerManager_AddPlayer_SkipFakePlayers
+    {
+        public static bool Prefix(Player player)
+        {
+            if (player == null) return true;
+            if (FakePlayerRegistry.IsFakeClientId(player.OwnerClientId))
+            {
+                return false;
+            }
+            return true;
+        }
+    }
+
     public static class PlayerPatch
     {
         //    [HarmonyPatch(typeof(Player), "Server_RespawnCharacter")]

@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace PuckAIPractice.Patches
 {
-    [HarmonyPatch(typeof(ServerManagerController), "Event_OnClientDisconnected")]
+    [HarmonyPatch(typeof(ServerManagerController), "Event_Everyone_OnClientDisconnected")]
     [HarmonyPatch(new Type[] { typeof(Dictionary<string, object>) })]
     public static class OnClientDisconnectedPatch
     {
@@ -32,7 +32,7 @@ namespace PuckAIPractice.Patches
             //}
         }
     }
-    [HarmonyPatch(typeof(ConnectionManagerController), "Event_Client_OnPauseMenuClickDisconnect")]
+    [HarmonyPatch(typeof(ConnectionManagerController), "Event_OnPauseMenuClickDisconnect")]
     [HarmonyPatch(new Type[] { typeof(Dictionary<string, object>) })]
     public static class OnPauseMenuClickDisconnectdPatch
     {

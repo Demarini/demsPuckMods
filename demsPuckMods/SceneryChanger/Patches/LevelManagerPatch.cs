@@ -46,8 +46,6 @@ namespace SceneryChanger.Patches
         static void Postfix(object __instance, Dictionary<string, object> eventParams)
         {
             var nm = NetworkManager.Singleton;
-            Debug.Log($"[Patch] GAME STATE CHANGED (IsClient={nm?.IsClient}, IsServer={nm?.IsServer}, IsHost={nm?.IsHost})");
-
             if (nm != null && !nm.IsClient) return;
 
             if (eventParams == null || !eventParams.TryGetValue("newGameState", out var raw))
@@ -67,13 +65,9 @@ namespace SceneryChanger.Patches
 
             GamePhase gamePhase = (GamePhase)_phaseGetter.Invoke(raw, null);
 
-            Debug.Log("[Patch] GAME STATE CHANGED 2");
             bool isCheering = gamePhase == GamePhase.BlueScore
                            || gamePhase == GamePhase.RedScore
                            || gamePhase == GamePhase.GameOver;
-
-            if (isCheering)
-                Debug.Log("[Patch] SOMEONE SCORED A GOAL");
 
             ToggleCheer(isCheering);
 
