@@ -1,0 +1,37 @@
+ Here's what you've got:
+
+  workshop.json
+
+  Registry of all your mods. I pre-filled ModifyMinimapIcons with workshop ID 3537113445 from your existing VDF. You'll need to fill in the publishedfileid for the other mods — any mod with a blank ID gets
+  skipped during publish. I marked the 6 mods currently in your Plugins folder as active: true and the rest as active: false.
+
+  publish.ps1
+
+  PowerShell script with these commands:
+
+  ┌────────────────────────────────────────────────────┬───────────────────────────────────────────────────────────┐
+  │                      Command                       │                       What it does                        │
+  ├────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ .\publish.ps1 list                                 │ Show all mods, their active status, and workshop IDs      │
+  ├────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ .\publish.ps1 ModifyMinimapIcons "Fixed scaling"   │ Build + publish one mod                                   │
+  ├────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ .\publish.ps1 all "Compatibility update"           │ Build + publish all active mods                           │
+  ├────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ .\publish.ps1 toggle BanIdiots                     │ Flip a mod's active flag (persists to workshop.json)      │
+  ├────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ .\publish.ps1 clean                                │ Remove all locally-deployed mods from your Plugins folder │
+  ├────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ .\publish.ps1 clean ModifyMinimapIcons             │ Remove just one mod from Plugins                          │
+  ├────────────────────────────────────────────────────┼───────────────────────────────────────────────────────────┤
+  │ .\publish.ps1 -NoBuild ModifyMinimapIcons "Hotfix" │ Publish without rebuilding                                │
+  └────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────┘
+
+  How the deployment separation works
+
+  The key trick: when you build through publish.ps1, it passes /p:PuckInstallDir=E:\SteamCMD\staging to MSBuild, which overrides the value in Directory.Build.props. Your post-build targets then copy DLLs to
+  the staging folder instead of your game's Plugins directory. SteamCMD publishes from staging.
+
+  Building normally in Visual Studio still deploys to your game folder for local testing — the override only applies when you run the publish script.
+
+  After you're done testing and have published, .\publish.ps1 clean wipes the locally-deployed copies from Plugins so they don't conflict with the workshop versions.
