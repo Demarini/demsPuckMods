@@ -105,14 +105,33 @@ namespace SceneryChanger.Services
             try
             {
                 var jsonPath = Path.Combine(folder, "AssetInformation.json");
-                if (!File.Exists(jsonPath)) return null;
+                if (!File.Exists(jsonPath))
+                {
+                    Debug.Log($"[BundleResolver] No AssetInformation.json in '{folder}'");
+                    return null;
+                }
                 var json = File.ReadAllText(jsonPath);
                 if (string.IsNullOrWhiteSpace(json)) return null;
 
-                try { return Newtonsoft.Json.JsonConvert.DeserializeObject<AssetInformation>(json); }
-                catch { return JsonUtility.FromJson<AssetInformation>(json); }
+                AssetInformation info;
+                try
+                {
+                    info = Newtonsoft.Json.JsonConvert.DeserializeObject<AssetInformation>(json);
+                    Debug.Log($"[BundleResolver] Loaded AssetInformation via Newtonsoft: music={info.musicEnabled} ambient={info.ambientAudioEnabled} glass={info.useGlass}");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[BundleResolver] Newtonsoft failed: {ex.Message}, falling back to JsonUtility");
+                    info = JsonUtility.FromJson<AssetInformation>(json);
+                    Debug.Log($"[BundleResolver] Loaded AssetInformation via JsonUtility: music={info.musicEnabled} ambient={info.ambientAudioEnabled} glass={info.useGlass}");
+                }
+                return info;
             }
-            catch { return null; }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[BundleResolver] Failed to load AssetInformation: {ex.Message}");
+                return null;
+            }
         }
 
         static string[] SafeGetDirectories(string dir) { try { return Directory.GetDirectories(dir); } catch { return Array.Empty<string>(); } }

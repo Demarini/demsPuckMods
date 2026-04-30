@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using SceneryChanger.Helpers;
+using SceneryChanger.Services;
 using UnityEngine;
 
 namespace SceneryChanger.Behaviors
@@ -127,7 +128,7 @@ namespace SceneryChanger.Behaviors
             if (ambientSource != null)
                 ambientSource.volume = audioMultiplier * defaultAmbient;
             if (goalNoise != null)
-                goalNoise.volume = audioMultiplier * defaultGoal;
+                goalNoise.volume = audioMultiplier * SceneryAudioState.GoalCrowdNoiseVolume;
 
             // If sources get destroyed later, we'll resume lookup unless we've given up.
             if (ambientSource == null && _ambientGaveUp) { /* intentionally do nothing */ }

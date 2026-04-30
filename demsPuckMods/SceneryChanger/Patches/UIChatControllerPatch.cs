@@ -43,6 +43,7 @@ namespace SceneryChanger.Patches
 
                 string payload = "!LoadMap " + MessageObfuscation.Encode(JsonConvert.SerializeObject(si));
                 SendChatToClient(payload, clientId);
+                SendChatToClient("Type /sl help for scenery loader commands.", clientId);
             }
             catch (Exception e)
             {
@@ -50,7 +51,7 @@ namespace SceneryChanger.Patches
             }
         }
 
-        static void SendChatToClient(string message, ulong clientId)
+        internal static void SendChatToClient(string message, ulong clientId)
         {
             var chatManagerType = AccessTools.TypeByName("ChatManager");
             if (chatManagerType == null) { Debug.LogWarning("[SceneryChanger] ChatManager not found"); return; }

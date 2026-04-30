@@ -97,6 +97,9 @@ namespace SceneryChanger.Services
 
             RebindShadersToGameRuntime(stagedRoot);
             SetupMusic(stagedRoot, info, resolved?.FolderPath);
+            SetupAmbientAudio(stagedRoot, info, resolved?.FolderPath);
+            if (info != null)
+                SceneryAudioState.GoalCrowdNoiseVolume = info.goalCrowdNoiseVolume;
             DumpStagedRoot(stagedRoot);
 
             // --- Apply skybox for *this token* only ---
@@ -159,6 +162,7 @@ namespace SceneryChanger.Services
             audioSource.Stop();
             audioSource.clip = null;
             audioSource.playOnAwake = false;
+            SceneryAudioState.MusicSource = audioSource;
 
             bool enabled = info != null && info.musicEnabled;
             if (!enabled)
@@ -168,7 +172,7 @@ namespace SceneryChanger.Services
                 return;
             }
 
-            string musicFile = ResolveMusicPath(info.musicPath, bundleFolder);
+            string musicFile = ResolveAudioPath(info.musicPath, bundleFolder);
             if (string.IsNullOrEmpty(musicFile) || !File.Exists(musicFile))
             {
                 Debug.LogWarning($"[SceneLoader] Music file not found: '{musicFile}'");
@@ -177,27 +181,28 @@ namespace SceneryChanger.Services
             }
 
             audioSource.volume = info.musicVolume;
+            SceneryAudioState.MusicVolume = info.musicVolume;
             Debug.Log($"[SceneLoader] Loading music: '{musicFile}' volume={info.musicVolume:F2}");
-            CoroutineRunner.Instance.StartCoroutine(LoadAndPlayMusic(audioSource, musicFile));
+            CoroutineRunner.Instance.StartCoroutine(LoadAndPlayAudio(audioSource, musicFile, "music"));
         }
 
-        static string ResolveMusicPath(string musicPath, string bundleFolder)
+        static string ResolveAudioPath(string audioPath, string bundleFolder)
         {
-            if (string.IsNullOrWhiteSpace(musicPath)) return null;
+            if (string.IsNullOrWhiteSpace(audioPath)) return null;
 
-            if (Path.IsPathRooted(musicPath) && File.Exists(musicPath))
-                return musicPath;
+            if (Path.IsPathRooted(audioPath) && File.Exists(audioPath))
+                return audioPath;
 
             if (!string.IsNullOrEmpty(bundleFolder))
             {
-                var relative = Path.Combine(bundleFolder, musicPath);
+                var relative = Path.Combine(bundleFolder, audioPath);
                 if (File.Exists(relative)) return relative;
             }
 
-            return musicPath;
+            return audioPath;
         }
 
-        static IEnumerator LoadAndPlayMusic(AudioSource source, string filePath)
+        static IEnumerator LoadAndPlayAudio(AudioSource source, string filePath, string label)
         {
             var uri = "file:///" + filePath.Replace('\\', '/');
             using (var www = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip(uri, AudioType.MPEG))
@@ -205,15 +210,76 @@ namespace SceneryChanger.Services
                 yield return www.SendWebRequest();
                 if (www.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError($"[SceneLoader] Failed to load music '{filePath}': {www.error}");
+                    Debug.LogError($"[SceneLoader] Failed to load {label} '{filePath}': {www.error}");
                     yield break;
                 }
                 var clip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(www);
                 clip.name = Path.GetFileNameWithoutExtension(filePath);
                 source.clip = clip;
                 source.Play();
-                Debug.Log($"[SceneLoader] Playing music: {clip.name} (volume={source.volume:F2})");
+                Debug.Log($"[SceneLoader] Playing {label}: {clip.name} (volume={source.volume:F2})");
             }
+        }
+
+        static void SetupAmbientAudio(GameObject root, AssetInformation info, string bundleFolder)
+        {
+            bool enabled = info != null && info.ambientAudioEnabled;
+
+            var audioTransform = root.transform.Find("AmbientAudio");
+            if (audioTransform == null)
+            {
+                foreach (Transform child in root.transform)
+                {
+                    audioTransform = child.Find("AmbientAudio");
+                    if (audioTransform != null) break;
+                }
+            }
+
+            if (audioTransform == null && !enabled)
+            {
+                SceneryAudioState.AmbientAudioSource = null;
+                return;
+            }
+
+            if (audioTransform == null)
+            {
+                var go = new GameObject("AmbientAudio");
+                go.transform.SetParent(root.transform, false);
+                audioTransform = go.transform;
+            }
+
+            var audioSource = audioTransform.GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = audioTransform.gameObject.AddComponent<AudioSource>();
+                audioSource.loop = true;
+                audioSource.spatialBlend = 0f;
+            }
+
+            audioSource.Stop();
+            audioSource.clip = null;
+            audioSource.playOnAwake = false;
+            SceneryAudioState.AmbientAudioSource = audioSource;
+
+            if (!enabled)
+            {
+                audioSource.enabled = false;
+                Debug.Log("[SceneLoader] Ambient audio disabled via AssetInformation");
+                return;
+            }
+
+            string audioFile = ResolveAudioPath(info.ambientAudioPath, bundleFolder);
+            if (string.IsNullOrEmpty(audioFile) || !File.Exists(audioFile))
+            {
+                Debug.LogWarning($"[SceneLoader] Ambient audio file not found: '{audioFile}'");
+                audioSource.enabled = false;
+                return;
+            }
+
+            audioSource.volume = info.ambientAudioVolume;
+            SceneryAudioState.AmbientAudioVolume = info.ambientAudioVolume;
+            Debug.Log($"[SceneLoader] Loading ambient audio: '{audioFile}' volume={info.ambientAudioVolume:F2}");
+            CoroutineRunner.Instance.StartCoroutine(LoadAndPlayAudio(audioSource, audioFile, "ambient audio"));
         }
 
         static void RebindShadersToGameRuntime(GameObject root)
