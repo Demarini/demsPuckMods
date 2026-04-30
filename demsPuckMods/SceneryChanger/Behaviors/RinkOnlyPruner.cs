@@ -11,6 +11,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.Splines;
 using SM = UnityEngine.SceneManagement;
@@ -224,19 +225,15 @@ namespace SceneryLoader.Behaviors
             RemoveArena.HideEverythingExceptRink(scene);
             RemoveArena.TryPruneScene(scene, "SCENE LOADED");
             ReflectionKiller.NukeAllReflections();
-            //RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            //RenderSettings.ambientLight = new Color(0.5f, 0.5f, 0.5f); // dark gray
-            RenderSettings.skybox = null;   // optional: kills visible skybox if it’s contributing
-                                            //LightingNullifier.KillAllSceneLighting(scene);
+            RenderSettings.ambientMode = AmbientMode.Flat;
+            RenderSettings.ambientLight = RenderSettings.ambientLight * 0.65f;
+            RenderSettings.skybox = null;
             foreach (var light in GameObject.FindObjectsOfType<Light>(true))
             {
                 if (light.enabled)
                 {
-                    //      Debug.Log($"[LightKiller] Disabling light {light.name} on {light.transform.parent?.name}");
-                    //      Debug.Log($"[LightKiller] {light.transform} " +
-                    //$"type={light.type}, intensity={light.intensity}, range={light.range}, shadows={light.shadows}");
-                    //light.enabled = false;
-                    light.intensity = light.intensity;
+                    Debug.Log($"[LightKiller] Disabling game light ‘{light.name}’ on ‘{light.transform.parent?.name}’ (type={light.type}, intensity={light.intensity})");
+                    light.enabled = false;
                 }
             }
         }
