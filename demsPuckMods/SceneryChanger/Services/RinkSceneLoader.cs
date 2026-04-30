@@ -298,7 +298,9 @@ namespace SceneryChanger.Services
             foreach (var tr in allTransforms)
             {
                 if (tr.name.StartsWith("Spectator", StringComparison.OrdinalIgnoreCase) &&
-                    !tr.name.Contains("Column") && !tr.name.Contains("Row"))
+                    !tr.name.Contains("Column") && !tr.name.Contains("Row") &&
+                    !tr.name.Contains("SpectatorList", StringComparison.OrdinalIgnoreCase) &&
+                    !tr.name.Contains("SpectatorLocations", StringComparison.OrdinalIgnoreCase))
                 {
                     spots.Add(tr);
                 }
