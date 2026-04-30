@@ -11,7 +11,6 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
-using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.Splines;
 using SM = UnityEngine.SceneManagement;
@@ -225,8 +224,6 @@ namespace SceneryLoader.Behaviors
             RemoveArena.HideEverythingExceptRink(scene);
             RemoveArena.TryPruneScene(scene, "SCENE LOADED");
             ReflectionKiller.NukeAllReflections();
-            RenderSettings.ambientMode = AmbientMode.Flat;
-            RenderSettings.ambientLight = RenderSettings.ambientLight * 0.65f;
             RenderSettings.skybox = null;
             foreach (var light in GameObject.FindObjectsOfType<Light>(true))
             {

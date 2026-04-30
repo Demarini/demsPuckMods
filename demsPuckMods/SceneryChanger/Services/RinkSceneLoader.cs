@@ -11,6 +11,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using SceneryLoader.Singletons;
 namespace SceneryChanger.Services
@@ -58,10 +59,16 @@ namespace SceneryChanger.Services
             {
                 if (info.useGlass) RemoveArena.ShowGlass();
                 else RemoveArena.HideGlass();
+
+                if (info.useCustomAmbient)
+                {
+                    RenderSettings.ambientMode = AmbientMode.Flat;
+                    RenderSettings.ambientLight = RenderSettings.ambientLight * info.ambientMultiplier;
+                    Debug.Log($"[SceneLoader] Ambient multiplier={info.ambientMultiplier} applied");
+                }
             }
             else
             {
-                // default if no file present
                 RemoveArena.ShowGlass();
             }
             AudioTweaks.TryDisableAmbientAudio();
@@ -89,6 +96,7 @@ namespace SceneryChanger.Services
             stagedRoot.transform.SetParent(container.transform, true);
 
             RebindShadersToGameRuntime(stagedRoot);
+            SetupMusic(stagedRoot, info, resolved?.FolderPath);
             DumpStagedRoot(stagedRoot);
 
             // --- Apply skybox for *this token* only ---
@@ -123,6 +131,91 @@ namespace SceneryChanger.Services
             // Optional cleanup of stray legacy objects AFTER swap
             //ClearLegacyOutsideContainer(); // see helper below (non-blocking)
         }
+        static void SetupMusic(GameObject root, AssetInformation info, string bundleFolder)
+        {
+            var musicTransform = root.transform.Find("Music");
+            if (musicTransform == null)
+            {
+                foreach (Transform child in root.transform)
+                {
+                    musicTransform = child.Find("Music");
+                    if (musicTransform != null) break;
+                }
+            }
+            if (musicTransform == null)
+            {
+                Debug.Log("[SceneLoader] No 'Music' GameObject found in prefab, skipping music setup");
+                return;
+            }
+
+            var audioSource = musicTransform.GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = musicTransform.gameObject.AddComponent<AudioSource>();
+                audioSource.loop = true;
+                audioSource.spatialBlend = 0f;
+            }
+
+            audioSource.Stop();
+            audioSource.clip = null;
+            audioSource.playOnAwake = false;
+
+            bool enabled = info != null && info.musicEnabled;
+            if (!enabled)
+            {
+                audioSource.enabled = false;
+                Debug.Log("[SceneLoader] Music disabled via AssetInformation");
+                return;
+            }
+
+            string musicFile = ResolveMusicPath(info.musicPath, bundleFolder);
+            if (string.IsNullOrEmpty(musicFile) || !File.Exists(musicFile))
+            {
+                Debug.LogWarning($"[SceneLoader] Music file not found: '{musicFile}'");
+                audioSource.enabled = false;
+                return;
+            }
+
+            audioSource.volume = info.musicVolume;
+            Debug.Log($"[SceneLoader] Loading music: '{musicFile}' volume={info.musicVolume:F2}");
+            CoroutineRunner.Instance.StartCoroutine(LoadAndPlayMusic(audioSource, musicFile));
+        }
+
+        static string ResolveMusicPath(string musicPath, string bundleFolder)
+        {
+            if (string.IsNullOrWhiteSpace(musicPath)) return null;
+
+            if (Path.IsPathRooted(musicPath) && File.Exists(musicPath))
+                return musicPath;
+
+            if (!string.IsNullOrEmpty(bundleFolder))
+            {
+                var relative = Path.Combine(bundleFolder, musicPath);
+                if (File.Exists(relative)) return relative;
+            }
+
+            return musicPath;
+        }
+
+        static IEnumerator LoadAndPlayMusic(AudioSource source, string filePath)
+        {
+            var uri = "file:///" + filePath.Replace('\\', '/');
+            using (var www = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip(uri, AudioType.MPEG))
+            {
+                yield return www.SendWebRequest();
+                if (www.result != UnityEngine.Networking.UnityWebRequest.Result.Success)
+                {
+                    Debug.LogError($"[SceneLoader] Failed to load music '{filePath}': {www.error}");
+                    yield break;
+                }
+                var clip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(www);
+                clip.name = Path.GetFileNameWithoutExtension(filePath);
+                source.clip = clip;
+                source.Play();
+                Debug.Log($"[SceneLoader] Playing music: {clip.name} (volume={source.volume:F2})");
+            }
+        }
+
         static void RebindShadersToGameRuntime(GameObject root)
         {
             try
