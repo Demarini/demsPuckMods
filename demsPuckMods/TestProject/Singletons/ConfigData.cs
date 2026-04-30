@@ -8,7 +8,7 @@ namespace MOTD.Singletons
     public class ConfigData
     {
         private static ConfigData _instance;
-        private static string ConfigPath => ModConfig.ConfigPath;
+        private static string ConfigPath => MOTDConfig.ConfigPath;
 
         public static ConfigData Instance
         {
@@ -31,7 +31,7 @@ namespace MOTD.Singletons
                 if (!File.Exists(ConfigPath))
                 {
                     Debug.Log($"[MOTD] Local config missing at {ConfigPath}. Initializing...");
-                    ModConfig.Initialize();
+                    MOTDConfig.Initialize();
 
                     if (string.IsNullOrEmpty(ConfigPath) || !File.Exists(ConfigPath))
                     {

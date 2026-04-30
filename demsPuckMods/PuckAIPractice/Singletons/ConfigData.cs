@@ -14,7 +14,7 @@ namespace PuckAIPractice.Singletons
     public class ConfigData
     {
         private static ConfigData _instance;
-        private static string ConfigPath => ModConfig.ConfigPath;
+        private static string ConfigPath => PuckAIPractice.Config.ModConfig.ConfigPath;
 
         public static ConfigData Instance
         {
@@ -35,7 +35,7 @@ namespace PuckAIPractice.Singletons
                 if (!File.Exists(ConfigPath))
                 {
                     Debug.Log($"[InputControl] Config not found at {ConfigPath}, initializing...");
-                    ModConfig.Initialize();
+                    PuckAIPractice.Config.ModConfig.Initialize();
                 }
 
                 string rawJson = File.ReadAllText(ConfigPath);

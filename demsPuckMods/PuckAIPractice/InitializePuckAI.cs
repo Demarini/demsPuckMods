@@ -26,7 +26,7 @@ namespace PuckAIPractice
             try
             {
                 GoalieRunner.Initialize();
-                ModConfig.Initialize();
+                PuckAIPractice.Config.ModConfig.Initialize();
                 DetectPositions.Create();
                 ConfigData.Load();
                 Goalies.GoaliesAreRunning = true;
@@ -69,21 +69,24 @@ namespace PuckAIPractice
             if (oldGameState.Phase == newGameState.Phase)
                 return;
 
-            if (newGameState.Phase != GamePhase.Warmup && newGameState.Phase != GamePhase.Playing)
+            // Step 3: pause the real bot while the replay copy is on the ice.
+            if (newGameState.Phase == GamePhase.Replay)
             {
-                Debug.Log($"[FAKE_SPAWN] Skipped spawn — new state is {newGameState.Phase}");
-                return;
+                foreach (Player bot in FakePlayerRegistry.All)
+                {
+                    var ai = bot.NetworkObject.GetComponent<GoalieAI>();
+                    if (ai != null) ai.enabled = false;
+                }
             }
-
-            Debug.Log($"[FAKE_SPAWN] State changed from {oldGameState.Phase} to {newGameState.Phase}. Injecting fake players...");
-
-            //for (int i = 0; i < 9; i++)
-            //    SpawnFakePlayer(i, PlayerRole.Attacker, (i % 2 == 0) ? PlayerTeam.Blue : PlayerTeam.Red);
-
-            //BotSpawning.SpawnFakePlayer(69, PlayerRole.Goalie, PlayerTeam.Blue);
-
-            //BotSpawning.SpawnFakePlayer(6969, PlayerRole.Goalie, PlayerTeam.Red);
-        } 
+            else if (oldGameState.Phase == GamePhase.Replay)
+            {
+                foreach (Player bot in FakePlayerRegistry.All)
+                {
+                    var ai = bot.NetworkObject.GetComponent<GoalieAI>();
+                    if (ai != null) ai.enabled = true;
+                }
+            }
+        }
     }
     //[HarmonyPatch(typeof(SettingsManager), "UpdateJerseySkin")]
     //public static class LogJerseySkinChange

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-Command *)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(& powershell.exe -NoProfile -Command \"npx -v\" 2>&1)",
+      "PowerShell(Test-Path *)",
+      "PowerShell(fnm *)",
+      "PowerShell([Environment]::GetEnvironmentVariable\\(\"PATH\", \"User\"\\) -split \";\" | Where-Object { $_ -match \"node|npm|nvm|fnm|volta\" })",
+      "PowerShell([Environment]::GetEnvironmentVariable\\(\"PATH\", \"Machine\"\\) -split \";\" | Where-Object { $_ -match \"node|npm|nvm|fnm|volta\" })",
+      "Read(//c/Users/Tom/**)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(json.dumps\\(v.get\\('mcpServers',{}\\), indent=2\\)\\) for k,v in d.get\\('projects',{}\\).items\\(\\) if 'ssh-mcp' in str\\(v.get\\('mcpServers',{}\\)\\)]\")"
+    ]
+  }
+}

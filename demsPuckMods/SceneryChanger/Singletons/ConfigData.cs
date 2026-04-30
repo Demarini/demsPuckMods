@@ -13,7 +13,7 @@ namespace SceneryLoader.Singletons
     public class ConfigData
     {
         private static ConfigData _instance;
-        private static string ConfigPath => ModConfig.ConfigPath;
+        private static string ConfigPath => SceneryLoader.Config.ModConfig.ConfigPath;
 
         public static ConfigData Instance
         {
@@ -25,7 +25,7 @@ namespace SceneryLoader.Singletons
             try
             {
                 Debug.Log("[SceneryLoader] Loading config...");
-                ModConfig.Refresh(seedIfMissing: true);
+                SceneryLoader.Config.ModConfig.Refresh(seedIfMissing: true);
                 if (string.IsNullOrEmpty(ConfigPath))
                 {
                     Debug.LogWarning("[SceneryLoader] No ConfigPath available; using in-memory defaults.");
@@ -36,7 +36,7 @@ namespace SceneryLoader.Singletons
                 if (!File.Exists(ConfigPath))
                 {
                     Debug.Log($"[SceneryLoader] Local config missing at {ConfigPath}. Initializing...");
-                    ModConfig.Initialize();
+                    SceneryLoader.Config.ModConfig.Initialize();
 
                     if (string.IsNullOrEmpty(ConfigPath) || !File.Exists(ConfigPath))
                     {

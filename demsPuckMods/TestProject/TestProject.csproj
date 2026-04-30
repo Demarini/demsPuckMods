@@ -58,9 +58,9 @@
   <ItemGroup>
     <Folder Include="Utilities\" />
   </ItemGroup>
-  <Target Name="PostBuildMoveDll" AfterTargets="Build">
+  <Target Name="PostBuildMoveDll" AfterTargets="Build" Condition="Exists('$(PuckInstallDir)')">
     <PropertyGroup>
-      <TargetDir>A:\SteamLibrary\steamapps\common\Puck\Plugins\TestProject</TargetDir>
+      <TargetDir>$(PuckInstallDir)\Plugins\TestProject</TargetDir>
     </PropertyGroup>
     <MakeDir Directories="$(TargetDir)" />
     <!-- Copy the DLL -->

@@ -155,20 +155,39 @@ namespace MOTD.Behaviors
         Action _discordHandler;
         Action _actionHandler;
         string _closeBtnBaseText = "CLOSE";
+        static System.Reflection.PropertyInfo _uiMgrInstanceProp;
+        static System.Reflection.PropertyInfo _rootVeProp;
+
+        static VisualElement GetUIRoot()
+        {
+            if (_uiMgrInstanceProp == null)
+            {
+                var uiMgrType = HarmonyLib.AccessTools.TypeByName("UIManager");
+                if (uiMgrType == null) return null;
+                _uiMgrInstanceProp = uiMgrType.BaseType?.GetProperty("Instance",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy);
+                _rootVeProp = uiMgrType.GetProperty("RootVisualElement",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            }
+            var instance = _uiMgrInstanceProp?.GetValue(null);
+            if (instance == null) return null;
+            return _rootVeProp?.GetValue(instance) as VisualElement;
+        }
+
         void Awake()
         {
-            //Debug.Log("[SimpleModal] Impl.Awake");
             StartCoroutine(Bootstrap());
         }
 
         IEnumerator Bootstrap()
         {
-            // wait for UI root to exist
-            while (UIManager.Instance == null || UIManager.Instance.RootVisualElement == null)
+            VisualElement root = null;
+            while (root == null)
+            {
+                root = GetUIRoot();
                 yield return null;
-
-            //Debug.Log("[SimpleModal] Bootstrap -> Build()");
-            Build(UIManager.Instance.RootVisualElement);
+            }
+            Build(root);
         }
         static string NormalizePathOrUrl(string s)
         {
@@ -705,7 +724,7 @@ namespace MOTD.Behaviors
             bool blockEsc = doc?.blockEscDuringDelay ?? true;
             bool blockOutside = doc?.blockClickOutsideDuringDelay ?? true;
             StartCloseCooldown(delay, blockEsc, blockOutside);
-            var root = UIManager.Instance?.RootVisualElement;
+            var root = GetUIRoot();
             if (root != null) { _overlay.RemoveFromHierarchy(); root.Add(_overlay); }
             _overlay.style.display = DisplayStyle.Flex;
             _overlay.visible = true;
@@ -942,7 +961,7 @@ namespace MOTD.Behaviors
 
         public void TearDown()
         {
-            var root = UIManager.Instance?.RootVisualElement;
+            var root = GetUIRoot();
             if (root != null) root.UnregisterCallback<KeyDownEvent>(OnKeyDown);
             _overlay?.RemoveFromHierarchy();
             _overlay = null;

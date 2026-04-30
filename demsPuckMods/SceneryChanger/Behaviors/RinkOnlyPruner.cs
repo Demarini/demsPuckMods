@@ -45,7 +45,7 @@ namespace SceneryLoader.Behaviors
         public bool hardNuke = true;
 
         [Tooltip("Scene name to target.")]
-        public string targetScene = "level_1";
+        public string targetScene = "level_default";
 
         public int passes = 6;
         public float passInterval = 0.2f;
@@ -151,8 +151,9 @@ namespace SceneryLoader.Behaviors
         void OnSceneLoaded(SM.Scene scene, SM.LoadSceneMode mode)
         {
             Debug.Log("Scene Loaded!");
+            SceneryChanger.Patches.Patch_LevelController.ResetCaches();
 
-            if (scene.name.Equals("level_1", StringComparison.OrdinalIgnoreCase))
+            if (scene.name.Equals("level_default", StringComparison.OrdinalIgnoreCase))
             {
                 //SceneDumper.DumpActiveSceneHierarchy(scene);
                 ConfigData.Load();
@@ -190,16 +191,18 @@ namespace SceneryLoader.Behaviors
             // One more frame so children under SpectatorLocations finish activating
             yield return null;
 
-            var mgr = SpectatorManager.Instance;
+            // Use reflection to avoid MonoBehaviourSingleton<T>.Instance generic inflation TLE.
+            var smType = AccessTools.TypeByName("SpectatorManager");
+            var mgr = smType != null ? UnityEngine.Object.FindFirstObjectByType(smType) : null;
             if (mgr == null)
             {
-                Debug.LogWarning("[SceneLoader] SpectatorManager.Instance not found. Skipping spawn.");
+                Debug.LogWarning("[SceneLoader] SpectatorManager not found. Skipping spawn.");
                 yield break;
             }
 
             try
             {
-                mgr.SpawnSpectators();
+                AccessTools.Method(smType, "SpawnSpectators")?.Invoke(mgr, null);
                 Debug.Log("[SceneLoader] Spectators spawned.");
             }
             catch (Exception e)
@@ -221,19 +224,13 @@ namespace SceneryLoader.Behaviors
             RemoveArena.HideEverythingExceptRink(scene);
             RemoveArena.TryPruneScene(scene, "SCENE LOADED");
             ReflectionKiller.NukeAllReflections();
-            //RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            //RenderSettings.ambientLight = new Color(0.5f, 0.5f, 0.5f); // dark gray
-            RenderSettings.skybox = null;   // optional: kills visible skybox if it’s contributing
-                                            //LightingNullifier.KillAllSceneLighting(scene);
+            RenderSettings.skybox = null;
             foreach (var light in GameObject.FindObjectsOfType<Light>(true))
             {
                 if (light.enabled)
                 {
-                    //      Debug.Log($"[LightKiller] Disabling light {light.name} on {light.transform.parent?.name}");
-                    //      Debug.Log($"[LightKiller] {light.transform} " +
-                    //$"type={light.type}, intensity={light.intensity}, range={light.range}, shadows={light.shadows}");
-                    //light.enabled = false;
-                    light.intensity = light.intensity;
+                    Debug.Log($"[LightKiller] Disabling game light ‘{light.name}’ on ‘{light.transform.parent?.name}’ (type={light.type}, intensity={light.intensity})");
+                    light.enabled = false;
                 }
             }
         }

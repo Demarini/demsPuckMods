@@ -1,58 +1,32 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using PuckAIPractice.Utilities;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Unity.Netcode;
 using UnityEngine;
 
 namespace PuckAIPractice
 {
+    // Records movement/input for all registered bots on every recorder tick.
     [HarmonyPatch(typeof(ReplayRecorder), "Server_Tick")]
     public static class ReplayRecorder_Server_Tick_Postfix
     {
-        // Cache a fast delegate to ReplayRecorder.Server_AddReplayEvent(string, object)
-        //private static readonly Action<ReplayRecorder, string, object> _addReplayEvent;
-
-        //// Simple payload example; replace with your own serializable type
-
-        //static ReplayRecorder_Server_Tick_Postfix()
-        //{
-        //    var mi = AccessTools.Method(
-        //        typeof(ReplayRecorder),
-        //        "Server_AddReplayEvent",
-        //        new[] { typeof(string), typeof(object) });
-
-        //    if (mi != null)
-        //    {
-        //        _addReplayEvent =
-        //            AccessTools.MethodDelegate<Action<ReplayRecorder, string, object>>(mi);
-        //    }
-        //}
-
-        // Runs after the original Server_Tick has completed
         static void Postfix(ReplayRecorder __instance)
         {
-            // If the original early-returned because we're not server, mirror that here
             if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
                 return;
 
-            // Add whatever you need after the recorder did its normal work
             try
             {
-
                 foreach (Player player in FakePlayerRegistry.All)
                 {
-                    //Debug.Log("Adding Replay For " + player.Username.Value.ToString());
                     __instance.Server_AddReplayEvent("PlayerBodyMove", new ReplayPlayerBodyMove
                     {
                         OwnerClientId = player.OwnerClientId,
                         Position = player.PlayerBody.transform.position,
                         Rotation = player.PlayerBody.transform.rotation,
-                        Stamina = player.PlayerBody.StaminaCompressed.Value,
-                        Speed = player.PlayerBody.StaminaCompressed.Value,
+                        Stamina = player.PlayerBody.Stamina.Value,
+                        Speed = player.PlayerBody.Speed.Value,
                         IsSprinting = player.PlayerBody.IsSprinting.Value,
                         IsSliding = player.PlayerBody.IsSliding.Value,
                         IsStopping = player.PlayerBody.IsStopping.Value,
@@ -77,70 +51,69 @@ namespace PuckAIPractice
             }
             catch (Exception e)
             {
-                Debug.LogError($"[YourMod] Postfix failed: {e}");
+                Debug.LogError($"[ReplayPatch] Server_Tick Postfix error: {e}");
             }
         }
     }
-    //[HarmonyPatch(typeof(ReplayRecorder), "Server_StartRecording")]
-    //public static class ReplayRecorder_Server_StartRecording_Postfix
-    //{
-    //    // Runs after the original Server_Tick has completed
-    //    static void Postfix(ReplayRecorder __instance)
-    //    {
-    //        // If the original early-returned because we're not server, mirror that here
-    //        if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
-    //            return;
 
-    //        // Add whatever you need after the recorder did its normal work
-    //        Debug.Log("Server Start Recording");
-    //        try
-    //        {
-    //            if (FakePlayerRegistry.All.Count() == 0)
-    //            {
-    //                Debug.Log("Detecting Bots Before Recording");
-    //                //BotSpawning.DetectOpenGoalAndSpawnBot();
-    //            }
-    //            foreach (Player player in FakePlayerRegistry.All)
-    //            {
-    //                __instance.Server_AddPlayerSpawnedEvent(player);
-    //                if (player.PlayerBody)
-    //                {
-    //                    Debug.Log("Goalie Skins");
-    //                    Debug.Log(player.PlayerBody.Player.JerseyGoalieRedSkin.Value.ToString());
-    //                    Debug.Log(player.PlayerBody.Player.JerseyGoalieBlueSkin.Value.ToString());
-    //                    __instance.Server_AddPlayerBodySpawnedEvent(player.PlayerBody);
-    //                }
-    //                if (player.Stick)
-    //                {
-    //                    __instance.Server_AddStickSpawnedEvent(player.Stick);
-    //                }
-    //            }
-    //        }
-    //        catch (Exception e)
-    //        {
-    //            Debug.LogError($"[YourMod] Postfix failed: {e}");
-    //        }
-    //    }
-    //}
-    //[HarmonyPatch(typeof(ReplayPlayer), "Server_StopReplay")]
-    //static class Event_OnPlayerSpawned_Prefix
-    //{
-    //    static bool Prefix(ReplayPlayer __instance)
-    //    {
-    //        try
-    //        {
-    //            if (!NetworkManager.Singleton.IsServer)
-    //            {
-    //                return false;
-    //            }
-    //            BotSpawning.DetectOpenGoalAndSpawnBot();
-    //            return true;
-    //        }
-    //        catch (Exception e)
-    //        {
-    //            Debug.LogError($"[ReplayPatch] Prefix(Event_OnPlayerSpawned) error: {e}");
-    //            return false;
-    //        }
-    //    }
-    //}
+    // Step 2: Inject bot spawn events into the initial recording snapshot so the
+    // replay system knows about them from tick 0 (not mid-recording).
+    [HarmonyPatch(typeof(ReplayRecorder), "Server_StartRecording")]
+    public static class ReplayRecorder_Server_StartRecording_Postfix
+    {
+        static void Postfix(ReplayRecorder __instance)
+        {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+                return;
+
+            try
+            {
+                foreach (Player player in FakePlayerRegistry.All)
+                {
+                    __instance.Server_AddPlayerSpawnedEvent(player);
+                    if (player.PlayerBody)
+                        __instance.Server_AddPlayerBodySpawnedEvent(player.PlayerBody);
+                    if (player.Stick)
+                        __instance.Server_AddStickSpawnedEvent(player.Stick);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ReplayPatch] Server_StartRecording Postfix error: {e}");
+            }
+        }
+    }
+
+    // Step 1: Block bot player-spawned events from being written mid-recording.
+    // Bots are injected at recording-start instead (see above), so mid-recording
+    // events would create a second entry and cause the duplicate-goalie bug.
+    [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnPlayerSpawned")]
+    static class BlockFakeBotPlayerSpawned
+    {
+        static bool Prefix(Dictionary<string, object> message)
+        {
+            var player = (Player)message["player"];
+            return !FakePlayerRegistry.IsFake(player);
+        }
+    }
+
+    [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnPlayerBodySpawned")]
+    static class BlockFakeBotPlayerBodySpawned
+    {
+        static bool Prefix(Dictionary<string, object> message)
+        {
+            var playerBody = (PlayerBody)message["playerBody"];
+            return playerBody == null || !FakePlayerRegistry.IsFake(playerBody.Player);
+        }
+    }
+
+    [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnStickSpawned")]
+    static class BlockFakeBotStickSpawned
+    {
+        static bool Prefix(Dictionary<string, object> message)
+        {
+            var stick = (Stick)message["stick"];
+            return stick == null || !FakePlayerRegistry.IsFake(stick.Player);
+        }
+    }
 }

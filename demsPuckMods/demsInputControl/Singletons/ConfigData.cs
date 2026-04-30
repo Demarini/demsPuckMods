@@ -14,7 +14,7 @@ namespace demsInputControl.Singletons
     public class ConfigData
     {
         private static ConfigData _instance;
-        private static string ConfigPath => ModConfig.ConfigPath;
+        private static string ConfigPath => InputControlModConfig.ConfigPath;
 
         public static ConfigData Instance
         {
@@ -35,7 +35,7 @@ namespace demsInputControl.Singletons
                 if (!File.Exists(ConfigPath))
                 {
                     Debug.Log($"[InputControl] Config not found at {ConfigPath}, initializing...");
-                    ModConfig.Initialize();
+                    InputControlModConfig.Initialize();
                 }
 
                 string rawJson = File.ReadAllText(ConfigPath);

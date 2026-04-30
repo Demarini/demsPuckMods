@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using Newtonsoft.Json;
 using SceneryChanger.Model;
 using SceneryChanger.Services;
@@ -7,90 +7,82 @@ using SceneryLoader.Services;
 using SceneryLoader.Singletons;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Reflection;
+using Unity.Netcode;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 namespace SceneryChanger.Patches
 {
     [HarmonyPatch]
     public static class UIChatControllerPatch
     {
-        // Access the private field UIChatController.uiChat
-        private static readonly AccessTools.FieldRef<UIChatController, UIChat>
-            _uiChatRef = AccessTools.FieldRefAccess<UIChatController, UIChat>("uiChat");
-
-        // ---- knobs you can change at runtime if you want
-        public static bool ReplaceWelcome = true;  // true = replace original; false = let original run
-        public static string MOTDCommand =
-            "!MOTD ";
-
         public static SceneInformation sceneInformation = null;
-        // Prefix: run before original
-        //[HarmonyPrefix]
-        //[HarmonyPatch(typeof(UIChatController),
-        //    "Event_Server_OnSynchronizeComplete",
-        //    new Type[] { typeof(Dictionary<string, object>) })]
-        //static bool Prefix(UIChatController __instance, Dictionary<string, object> message)
-        //{
-        //    if (!ReplaceWelcome)
-        //        return true; // let the game send its own message
 
-        //    var uiChat = _uiChatRef(__instance);
-        //    if (uiChat == null) return false; // skip original anyway
-
-        //    // message["clientId"] can be boxed as int/long/ulong; be tolerant
-        //    ulong clientId = 0;
-        //    try { clientId = Convert.ToUInt64(message?["clientId"]); } catch { /* ignore */ }
-
-        //    uiChat.Server_SendSystemChatMessage(CustomWelcome, clientId);
-
-        //    return false; // skip original welcome
-        //}
-
-        // --- If instead you want to APPEND your own message AFTER the original,
-        // comment out the Prefix above and use this Postfix:
+        static MethodBase TargetMethod()
+        {
+            // Use reflection to find the game's SceneManager (global namespace),
+            // not Unity's UnityEngine.SceneManagement.SceneManager.
+            var type = AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(a => { try { return a.GetTypes(); } catch { return Type.EmptyTypes; } })
+                .FirstOrDefault(t => t.Name == "SceneManager" && (t.Namespace == null || t.Namespace == ""));
+            return type == null ? null : AccessTools.Method(type, "Server_OnClientSceneSynchronizeComplete");
+        }
 
         [HarmonyPostfix]
-        [HarmonyPatch(typeof(UIChatController),
-            "Event_Server_OnSynchronizeComplete",
-            new Type[] { typeof(Dictionary<string, object>) })]
-        static void Postfix(UIChatController __instance, Dictionary<string, object> message)
+        static void SyncComplete_Postfix(ulong clientId)
         {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+                return;
 
-            UnityEngine.Debug.Log("Sending loadmap command");
-            var uiChat = _uiChatRef(__instance);
-            if (uiChat == null) return;
-
-            ulong clientId = 0;
-            try { clientId = Convert.ToUInt64(message?["clientId"]); } catch { }
-            UnityEngine.Debug.Log(ConfigData.Instance.sceneInformation);
-            ConfigData.Load();
-            uiChat.Server_SendSystemChatMessage("!LoadMap " + MessageObfuscation.Encode(JsonConvert.SerializeObject(ConfigData.Instance.sceneInformation)), clientId);
-        }
-        [HarmonyPatch(typeof(UIChat))]
-        public static class UIChat_AddChatMessage_MotdPatch
-        {
-            [HarmonyPrefix]
-            [HarmonyPatch(nameof(UIChat.AddChatMessage), new Type[] { typeof(string) })]
-            static bool Prefix(UIChat __instance, ref string message)
+            try
             {
-                //UnityEngine.Debug.Log("Received Message");
-                //UnityEngine.Debug.Log(message);
-                if (string.IsNullOrWhiteSpace(message)) return true;
+                ConfigData.Load();
+                var si = ConfigData.Instance.sceneInformation;
+                if (si == null) return;
 
-                var m = message.Trim();
+                string payload = "!LoadMap " + MessageObfuscation.Encode(JsonConvert.SerializeObject(si));
+                SendChatToClient(payload, clientId);
+                SendChatToClient("Type /sl help for scenery loader commands.", clientId);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneryChanger] SyncComplete_Postfix error: {e}");
+            }
+        }
+
+        internal static void SendChatToClient(string message, ulong clientId)
+        {
+            var chatManagerType = AccessTools.TypeByName("ChatManager");
+            if (chatManagerType == null) { Debug.LogWarning("[SceneryChanger] ChatManager not found"); return; }
+            var instance = AccessTools.PropertyGetter(chatManagerType.BaseType, "Instance")?.Invoke(null, null);
+            if (instance == null) { Debug.LogWarning("[SceneryChanger] ChatManager.Instance is null"); return; }
+            AccessTools.Method(chatManagerType, "Server_SendChatMessageToClients", new Type[] { typeof(string), typeof(ulong[]) })
+                ?.Invoke(instance, new object[] { message, new ulong[] { clientId } });
+        }
+
+        [HarmonyPatch]
+        public static class UIChat_AddChatMessage_LoadMapPatch
+        {
+            static MethodBase TargetMethod()
+            {
+                var type = AccessTools.TypeByName("UIChat");
+                if (type == null) return null;
+                return type.GetMethods()
+                    .FirstOrDefault(m => m.Name == "AddChatMessage" && m.GetParameters().Length == 3);
+            }
+
+            [HarmonyPrefix]
+            static bool Prefix(UIChat __instance, ChatMessage chatMessage)
+            {
+                if (chatMessage == null) return true;
+
+                var text = GetMessageText(chatMessage);
                 const string cmd = "!LoadMap ";
 
-                if (!m.StartsWith(cmd)) return true;
+                if (!text.StartsWith(cmd)) return true;
 
-                // grab the encoded payload after the first space
-                var encoded = m.Substring(cmd.Length).Trim();
-
-                // if your transport ever turns '+' into spaces, fix it up:
+                var encoded = text.Substring(cmd.Length).Trim();
                 if (encoded.IndexOf(' ') >= 0 && encoded.IndexOf('+') < 0)
                     encoded = encoded.Replace(' ', '+');
 
@@ -98,16 +90,15 @@ namespace SceneryChanger.Patches
                 try
                 {
                     json = MessageObfuscation.Decode(encoded);
-                    //UnityEngine.Debug.Log(json);
                 }
                 catch (FormatException fe)
                 {
-                    UnityEngine.Debug.LogWarning($"[SceneLoader] Bad Base64 in !LoadMap payload: {fe.Message}");
+                    Debug.LogWarning($"[SceneLoader] Bad Base64 in !LoadMap payload: {fe.Message}");
                     return true;
                 }
                 catch (Exception e)
                 {
-                    UnityEngine.Debug.LogWarning($"[SceneLoader] Decode failed: {e}");
+                    Debug.LogWarning($"[SceneLoader] Decode failed: {e}");
                     return true;
                 }
 
@@ -118,32 +109,27 @@ namespace SceneryChanger.Patches
                 }
                 catch (Exception e)
                 {
-                    UnityEngine.Debug.LogWarning($"[SceneLoader] JSON parse failed: {e}");
+                    Debug.LogWarning($"[SceneLoader] JSON parse failed: {e}");
                     return true;
                 }
 
-                // optional: store it globally
                 sceneInformation = si;
 
-                if(!PracticeModeDetector.IsPracticeMode)
-{
-                    UnityEngine.Debug.Log("[SceneLoader] LoadMap directive received; swapping scene.");
-                    SceneLoadCoordinator.OnServerSceneDirective(si);
-                    return false; // swallow chat
-                }
-
-                return false; // let chat render if we didn't act
-            }
-
-            static bool IsLoadMapCommand(string s)
-            {
-                // Accept "!motd" or "/motd" (case-insensitive), optionally with trailing spaces
-                if (s.ToUpper().Contains("!LOADMAP"))
+                if (!PracticeModeDetector.IsPracticeMode)
                 {
-                    return true;
+                    Debug.Log("[SceneLoader] LoadMap directive received; swapping scene.");
+                    SceneLoadCoordinator.OnServerSceneDirective(si);
                 }
-                else { return false; }
+
+                return false;
             }
+        }
+
+        static string GetMessageText(ChatMessage chatMessage)
+        {
+            var v = Traverse.Create(chatMessage).Field("Content").GetValue<object>()
+                 ?? Traverse.Create(chatMessage).Field("Message").GetValue<object>();
+            return (v?.ToString() ?? string.Empty).Trim();
         }
     }
 }

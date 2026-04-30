@@ -1,4 +1,4 @@
-﻿using demsInputControl.Logging;
+using demsInputControl.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,8 +29,9 @@ namespace demsInputControl.Utils
 
         private static float faceoffTimer = 0f;
 
-        public static void Update(PlayerBodyV2 player)
+        public static void Update(PlayerBody player)
         {
+            if (player == null) return;
             Vector3 currentPosition = player.transform.position;
             float currentTime = Time.time;
 
@@ -45,7 +46,6 @@ namespace demsInputControl.Utils
             if (PositionHistory.Count < 2)
                 return;
 
-            // Regression-based velocity estimation
             int n = PositionHistory.Count;
             float meanTime = TimestampHistory.Average();
             float denom = TimestampHistory.Sum(t => (t - meanTime) * (t - meanTime));
@@ -73,12 +73,8 @@ namespace demsInputControl.Utils
                 return;
 
             LastLocalZVelocity = rawZ;
+            PredictedLocalZVelocity = rawZ;
 
-            // Predict forward (linear extrapolation)
-            float predictionHorizon = 0.1f;
-            PredictedLocalZVelocity = rawZ; // Could refine with acceleration later
-
-            // Faceoff detection
             if (Mathf.Abs(rawZ) < FaceoffSpeedThreshold)
             {
                 faceoffTimer += Time.deltaTime;
@@ -90,7 +86,6 @@ namespace demsInputControl.Utils
                 IsFaceoff = false;
             }
 
-            // Track movement direction (smoothed)
             Vector3 currentDelta = currentPosition - PositionHistory[Math.Max(0, PositionHistory.Count - 2)];
             Vector3 currentDir = currentDelta.normalized;
             if (currentDir != Vector3.zero)
@@ -103,13 +98,17 @@ namespace demsInputControl.Utils
                 SmoothedMovementDirection += dir;
             SmoothedMovementDirection.Normalize();
 
-            // Forward/backward check
             float forwardDot = Vector3.Dot(player.transform.forward, SmoothedMovementDirection);
             IsMovingBackwards = forwardDot < -0.2f;
-            LastLocalZVelocity = IsMovingBackwards ? player.Speed * -1 : player.Speed;
+
+            float speed = player.Movement != null ? player.Movement.Speed : 0f;
+            LastLocalZVelocity = IsMovingBackwards ? speed * -1 : speed;
+
+            bool inverted = player.VelocityLean != null && player.VelocityLean.Inverted;
+
             InputControlLogger.Log(LogCategory.Velocity, $"[VelocityTracker] LocalZ={LastLocalZVelocity:F3}, Predicted={PredictedLocalZVelocity:F3}, Faceoff={IsFaceoff}, Speed={velocity.magnitude:F3}");
             InputControlLogger.Log(LogCategory.Velocity, $"[VelocityTracker] MovementDirection={SmoothedMovementDirection}, IsBackwards={IsMovingBackwards}");
-            InputControlLogger.Log(LogCategory.Velocity, $"[VelocityTracker] Velocitymovementthing={player.VelocityLean.Inverted}");
+            InputControlLogger.Log(LogCategory.Velocity, $"[VelocityTracker] Velocitymovementthing={inverted}");
         }
     }
 }

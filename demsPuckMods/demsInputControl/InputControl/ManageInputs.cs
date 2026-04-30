@@ -105,9 +105,6 @@ namespace demsInputControl
             _pingSpikeEndTime = Time.time + durationSeconds;
             InputControlLogger.Log(LogCategory.PracticeModeDetection, $"[PingSpike] Simulating spike of +{extraLatencyMs}ms for {durationSeconds}s");
         }
-        private static readonly MethodInfo handleInputsMethod = typeof(PlayerBodyV2)
-            .GetMethod("HandleInputs", BindingFlags.NonPublic | BindingFlags.Instance);
-
         private static void QueueAllInputs(PlayerInput input)
         {
             bool shouldSimulateLatency = CurrentDelay > 0f && (!ConfigData.Instance.DelayInputs.OnlyInPracticeMode || PracticeModeDetector.IsPracticeMode);
@@ -134,43 +131,31 @@ namespace demsInputControl
             }
             if (input.MoveInput.HasChanged)
             {
-                short x = (short)(input.MoveInput.ClientValue.x * 32767f);
-                short y = (short)(input.MoveInput.ClientValue.y * 32767f);
+                short x = NetworkingUtils.CompressFloatToShort(input.MoveInput.ClientValue.x, -1f, 1f);
+                short y = NetworkingUtils.CompressFloatToShort(input.MoveInput.ClientValue.y, -1f, 1f);
 
                 EnqueueOrApply(() =>
                 {
                     input.Client_MoveInputRpc(x, y);
                     input.MoveInput.ClientTick();
-
-                    var body = input.GetComponent<PlayerBodyV2>();
-                    var movement = input.GetComponent<Movement>();
-                    if (body != null && movement != null && movement.Rigidbody != null && handleInputsMethod != null)
-                    {
-                        Vector3 localVel = movement.MovementDirection.InverseTransformVector(movement.Rigidbody.linearVelocity);
-                        if (Mathf.Abs(localVel.z) < 0.05f) // Only invoke when movement has stopped
-                        {
-                            //Debug.Log("[InputControl] Velocity near zero, calling HandleInputs()");
-                            handleInputsMethod.Invoke(body, null);
-                        }
-                        else
-                        {
-                            //Debug.Log("[InputControl] Skipping HandleInputs() due to velocity: " + localVel.z.ToString("F3"));
-                        }
-                    }
                 },
                 () => { });
             }
             if (input.StickRaycastOriginAngleInput.HasChanged)
             {
-                short x = (short)(input.StickRaycastOriginAngleInput.ClientValue.x / 360f * 32767f);
-                short y = (short)(input.StickRaycastOriginAngleInput.ClientValue.y / 360f * 32767f);
+                Vector2 minAng = input.MinimumStickRaycastOriginAngle;
+                Vector2 maxAng = input.MaximumStickRaycastOriginAngle;
+                short x = NetworkingUtils.CompressFloatToShort(input.StickRaycastOriginAngleInput.ClientValue.x, minAng.x, maxAng.x);
+                short y = NetworkingUtils.CompressFloatToShort(input.StickRaycastOriginAngleInput.ClientValue.y, minAng.y, maxAng.y);
                 EnqueueOrApply(() => input.Client_RaycastOriginAngleInputRpc(x, y), () => input.StickRaycastOriginAngleInput.ClientTick());
             }
 
             if (input.LookAngleInput.HasChanged)
             {
-                short x = (short)(input.LookAngleInput.ClientValue.x / 360f * 32767f);
-                short y = (short)(input.LookAngleInput.ClientValue.y / 360f * 32767f);
+                Vector2 minAng = input.MinimumLookAngle;
+                Vector2 maxAng = input.MaximumLookAngle;
+                short x = NetworkingUtils.CompressFloatToShort(input.LookAngleInput.ClientValue.x, minAng.x, maxAng.x);
+                short y = NetworkingUtils.CompressFloatToShort(input.LookAngleInput.ClientValue.y, minAng.y, maxAng.y);
                 EnqueueOrApply(() => input.Client_LookAngleInputRpc(x, y), () => input.LookAngleInput.ClientTick());
             }
 
@@ -186,7 +171,7 @@ namespace demsInputControl
                 EnqueueOrApply(() => input.Client_SlideInputRpc(val), () => input.SlideInput.ClientTick());
             }
 
-            if (input.SprintInput.HasChanged && (!SprintControl.IsSprintingBlockedByVelocity || !ConfigData.Instance.ModifySprintControl.AllowModifySprintControl))
+            if (input.SprintInput.HasChanged)
             {
                 InputControlLogger.Log(LogCategory.SprintControl, "Sprint Input Changed");
                 var val = input.SprintInput.ClientValue;
@@ -216,20 +201,18 @@ namespace demsInputControl
             if (input.StopInput.HasChanged && !StopOverridePatch.ShouldForceStopInputChanged)
             {
                 InputControlLogger.Log(LogCategory.StopControl, "Queuing manual StopInput change");
-                EnqueueOrApply(() => input.Client_StopInputRpc(input.StopInput.ClientValue), () => input.StopInput.ClientTick());
+                var stopVal = input.StopInput.ClientValue;
+                EnqueueOrApply(() => input.Client_StopInputRpc(stopVal), () => input.StopInput.ClientTick());
             }
 
             if (StopOverridePatch.ShouldForceStopInputChanged)
             {
                 InputControlLogger.Log(LogCategory.StopControl, "Stop Input Has Changed");
                 StopOverridePatch.LastForceStopInput = StopOverridePatch.ShouldForceStopInput;
-                EnqueueOrApply(() => input.Client_StopInputRpc(StopOverridePatch.ShouldForceStopInput), () => { });
+                var forceStop = StopOverridePatch.ShouldForceStopInput;
+                EnqueueOrApply(() => input.Client_StopInputRpc(forceStop), () => { });
                 InputControlLogger.Log(LogCategory.StopControl, $"Sending Stop Input {StopOverridePatch.ShouldForceStopInput}");
                 InputControlLogger.Log(LogCategory.StopControl, $"Server Value {input.StopInput.ServerValue}");
-            }
-            if (input.JumpInput.HasChanged)
-            {
-                EnqueueOrApply(() => input.Client_JumpInputRpc(), () => input.JumpInput.ClientTick());
             }
             if (input.TwistLeftInput.HasChanged)
             {
@@ -279,12 +262,6 @@ namespace demsInputControl
             {
                 var val = input.TalkInput.ClientValue;
                 EnqueueOrApply(() => input.Client_TalkInputRpc(val), () => input.TalkInput.ClientTick());
-            }
-
-            if (input.SleepInput.HasChanged)
-            {
-                var val = input.SleepInput.ClientValue;
-                EnqueueOrApply(() => input.Client_SleepInputRpc(val), () => input.SleepInput.ClientTick());
             }
         }
         public static void EnqueueCustomInput(PlayerInput input, Action rpc)

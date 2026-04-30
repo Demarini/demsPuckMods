@@ -1,4 +1,6 @@
-﻿using SceneryChanger.Helpers;
+﻿using HarmonyLib;
+using SceneryChanger.Helpers;
+using SceneryChanger.Services;
 using UnityEngine;
 
 namespace SceneryChanger.Behaviors
@@ -25,6 +27,12 @@ namespace SceneryChanger.Behaviors
         int _goalAttempts;
         bool _ambientGaveUp;
         bool _goalGaveUp;
+
+        static System.Type _smType;
+        static System.Reflection.PropertyInfo _globalVolProp;
+        static System.Reflection.PropertyInfo _ambientVolProp;
+        static bool _smReflectionInit;
+        Object _cachedSM;
 
         public static void Install()
         {
@@ -55,6 +63,9 @@ namespace SceneryChanger.Behaviors
 
         void Update()
         {
+            var nm = Unity.Netcode.NetworkManager.Singleton;
+            if (nm == null || !nm.IsClient) return;
+
             float now = Time.time;
             if (now < _nextUpdateAt) return;
             _nextUpdateAt = now + updateInterval;
@@ -95,11 +106,29 @@ namespace SceneryChanger.Behaviors
             }
 
             // Apply volumes only if the sources exist
-            float audioMultiplier = SettingsManager.Instance.GlobalVolume * SettingsManager.Instance.AmbientVolume;
+            // Use reflection to avoid MonoBehaviourSingleton<SettingsManager> generic inflation TLE
+            if (!_smReflectionInit)
+            {
+                _smReflectionInit = true;
+                _smType = AccessTools.TypeByName("SettingsManager");
+                if (_smType != null)
+                {
+                    _globalVolProp = AccessTools.Property(_smType, "GlobalVolume");
+                    _ambientVolProp = AccessTools.Property(_smType, "AmbientVolume");
+                }
+            }
+            if (_smType == null || _globalVolProp == null || _ambientVolProp == null) return;
+            if (!_cachedSM)
+                _cachedSM = Object.FindFirstObjectByType(_smType);
+            if (!_cachedSM) return;
+
+            float globalVol = (float)_globalVolProp.GetValue(_cachedSM, null);
+            float ambientVol = (float)_ambientVolProp.GetValue(_cachedSM, null);
+            float audioMultiplier = globalVol * ambientVol;
             if (ambientSource != null)
                 ambientSource.volume = audioMultiplier * defaultAmbient;
             if (goalNoise != null)
-                goalNoise.volume = audioMultiplier * defaultGoal;
+                goalNoise.volume = audioMultiplier * SceneryAudioState.GoalCrowdNoiseVolume;
 
             // If sources get destroyed later, we'll resume lookup unless we've given up.
             if (ambientSource == null && _ambientGaveUp) { /* intentionally do nothing */ }

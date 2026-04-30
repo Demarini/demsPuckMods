@@ -33,8 +33,8 @@ namespace PuckAIPractice.Patches
             string command = (string)message["command"];
             ulong clientId = (ulong)message["clientId"];
             string[] parsedCommand = (string[])message["args"];
-            Player playerByClientId = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayerByClientId(clientId);
-            VoteChatCommandHelper.VotesNeeded = Mathf.RoundToInt((float)NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayers(false).Count / 2f + 0.5f);
+            Player playerByClientId = PlayerManager.Instance.GetPlayerByClientId(clientId);
+            VoteChatCommandHelper.VotesNeeded = Mathf.RoundToInt((float)PlayerManager.Instance.GetPlayers(false).Count / 2f + 0.5f);
 
             if(command == "/chaser" && parsedCommand.Count() == 0)
             {
@@ -44,7 +44,7 @@ namespace PuckAIPractice.Patches
             {
                 VoteManager voteManager = (VoteManager)Traverse.Create(__instance).Field("voteManager").GetValue();
                 var vm = Traverse.Create(voteManager);
-                Player player = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayerByUsername("dem", false);
+                Player player = PlayerManager.Instance.GetPlayerByUsername("dem", false);
                 List<string> goalieData = new List<string>() { "both", parsedCommand[0] };
                 //if (!vm.Method("Server_IsVoteStarted", new object[] { CustomVoteTypes.GoalieDifficulty }).GetValue<bool>())
                 //{
@@ -52,7 +52,7 @@ namespace PuckAIPractice.Patches
                 //      .GetValue();
                 //}
                 //vm.Method("Server_SubmitVote", new object[] { CustomVoteTypes.GoalieDifficulty, clientId }).GetValue();
-                Player sender = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayerByClientId(clientId);
+                Player sender = PlayerManager.Instance.GetPlayerByClientId(clientId);
                 if (sender != null)
                 {
                     return SpawnGoaliesBasedOffCommand(parsedCommand[0], GoalieSession.Both);
@@ -63,7 +63,7 @@ namespace PuckAIPractice.Patches
                 //Debug.Log("[GOALIES] Custom command triggered!");
                 //Debug.Log(parsedCommand.Count());
                 // You can extract the caller ID if needed
-                Player sender = NetworkBehaviourSingleton<PlayerManager>.Instance.GetPlayerByClientId(clientId);
+                Player sender = PlayerManager.Instance.GetPlayerByClientId(clientId);
                 //Debug.Log($"[GOALIES] Command issued by {sender.Username.Value}");
                 if (sender != null)
                 {

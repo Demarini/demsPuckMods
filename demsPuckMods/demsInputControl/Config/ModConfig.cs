@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace demsInputControl.Config
 {
-    public static class ModConfig
+    public static class InputControlModConfig
     {
         public static string ConfigPath { get; private set; }
 
@@ -56,7 +56,7 @@ namespace demsInputControl.Config
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[InputControl] Error during ModConfig.Initialize: {ex}");
+                Debug.LogError($"[InputControl] Error during InputControlModConfig.Initialize: {ex}");
             }
         }
     }

@@ -27,7 +27,7 @@ namespace SceneryChanger.Services
 
         public static void OnSceneLoaded(Scene scene, bool isPractice, SceneInformation localSI)
         {
-            if (!scene.name.Equals("level_1", StringComparison.OrdinalIgnoreCase)) { Reset(); return; }
+            if (!scene.name.Equals("level_default", StringComparison.OrdinalIgnoreCase)) { Reset(); return; }
 
             _practice = isPractice;
             _serverSI = null; _serverSig = null;
@@ -97,7 +97,11 @@ namespace SceneryChanger.Services
 
             // Prefer server if it arrived during window, else local (if allowed)
             var chosen = _serverSI ?? (localSI != null && localSI.useSceneLocally ? localSI : null);
-            if (chosen == null) { Debug.Log("[Coordinator] No server directive and local disabled; idle."); yield break; }
+            if (chosen == null)
+            {
+                Debug.Log($"[Coordinator] No server directive and local disabled; idle. (localSI null? {localSI == null}, useSceneLocally={localSI?.useSceneLocally})");
+                yield break;
+            }
 
             var sig = new SceneSignature(chosen);
             if (_pendingSig != null && sig.Equals(_pendingSig)) { Debug.Log("[Coordinator] Duplicate request; skip."); yield break; }

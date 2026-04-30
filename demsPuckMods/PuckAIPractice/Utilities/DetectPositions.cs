@@ -25,7 +25,7 @@ namespace PuckAIPractice.Utilities
         {
             frameCounter++;
 
-            if (frameCounter >= 10 || true) // every 10 frames
+            if (frameCounter >= 10)
             {
                 if ((!PracticeModeDetector.IsPracticeMode && !NetworkManager.Singleton.IsServer) || GameManager.Instance.Phase == GamePhase.Replay)
                 {
@@ -75,7 +75,7 @@ namespace PuckAIPractice.Utilities
         }
         public static void UpdateLabel(Player player)
         {
-            var __instance = UIScoreboard.Instance;
+            var __instance = UIManager.Instance.Scoreboard;
             if (__instance == null || player == null)
                 return;
 

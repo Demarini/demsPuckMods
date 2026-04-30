@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace MOTD.Config
 {
-    public static class ModConfig
+    public static class MOTDConfig
     {
         public static string ConfigPath { get; private set; } // <moddir>/MOTDConfig.local.json
 

@@ -49,66 +49,43 @@ namespace PuckAIPractice.Utilities
 
             ulong fakeClientId = 7777777UL + (ulong)(team == PlayerTeam.Red ? 1 : 0);
             botIndex++;
+            FakePlayerRegistry.ReserveFakeClientId(fakeClientId);
             netObj.SpawnWithOwnership(fakeClientId, true);
 
             var player = playerObj.GetComponent<Player>();
             player.Username.Value = $"demBot_Chaser";
-            player.Team.Value = team;
+            player.Server_SetGameState(team: team, role: role);
             player.Number.Value = 7;
-            player.Role.Value = role;
-            string randomJersey = RandomSkins.GetRandomJersey();
-            string randomStick = RandomSkins.GetRandomStickSkin(role);
-            string randomShaftTape = RandomSkins.GetRandomShaftTape(role);
-            string randomBladeTape = RandomSkins.GetRandomBladeTape(role);
-            string randomMustache = RandomSkins.GetRandomMustache();
-            string randomBeard = RandomSkins.GetRandomBeard();
-            string flag = RandomSkins.GetRandomCountry();
-            string visor = RandomSkins.GetRandomVisor();
-            player.JerseyGoalieRedSkin.Value = new FixedString32Bytes(randomJersey);
-            player.JerseyGoalieBlueSkin.Value = new FixedString32Bytes(randomJersey);
-            player.StickGoalieRedSkin.Value = new FixedString32Bytes(randomStick);
-            player.StickGoalieBlueSkin.Value = new FixedString32Bytes(randomStick);
-            player.StickBladeGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
-            player.StickBladeGoalieRedTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
-            player.StickShaftGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
-            player.StickShaftGoalieRedTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
-            player.Mustache.Value = new FixedString32Bytes(randomMustache);
-            player.Beard.Value = new FixedString32Bytes(randomBeard);
-            player.Country.Value = new FixedString32Bytes(flag);
-            player.VisorAttackerBlueSkin.Value = new FixedString32Bytes(visor);
-            player.VisorAttackerRedSkin.Value = new FixedString32Bytes(visor);
-            player.VisorGoalieBlueSkin.Value = new FixedString32Bytes(visor);
-            player.VisorGoalieRedSkin.Value = new FixedString32Bytes(visor);
-            var position = GetNextUnclaimedPosition(player.Team.Value, player.Role.Value);
-            position.Server_Claim(player);
-            //playerObj.Server_RespawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), PlayerRole.Goalie);
-            //position.Server_Claim(player);
-            // Nudge goalie back toward the goal slightly to reduce open angles
+            player.CustomizationState.Value = new PlayerCustomizationState();
+            FakePlayerRegistry.Register(player, team);
+            var position = GetNextUnclaimedPosition(player.Team, player.Role);
+            if (position != null)
+                position.Server_Claim(player);
             var body = player.PlayerBody;
-            var mesh = body.PlayerMesh;
-            var stickMesh = body.Stick.StickMesh;
-            //Debug.Log("Player Jersey - " + player.GetPlayerJerseySkin().Value.ToString());
-            mesh.SetJersey(player.Team.Value, randomJersey);
-            mesh.SetNumber(player.Number.Value.ToString());
-            mesh.SetUsername(player.Username.Value.ToString());
-            mesh.SetRole(player.Role.Value);
-            mesh.PlayerHead.SetMustache(RandomSkins.GetRandomMustache());
-            mesh.PlayerHead.SetHelmetFlag(RandomSkins.GetRandomCountry());
-            mesh.PlayerHead.SetHelmetVisor(RandomSkins.GetRandomVisor());
-            mesh.PlayerHead.SetBeard(RandomSkins.GetRandomBeard());
-            stickMesh.SetBladeTape(RandomSkins.GetRandomBladeTape(player.Role.Value));
-            stickMesh.SetSkin(player.Team.Value, RandomSkins.GetRandomStickSkin(player.Role.Value));
-            stickMesh.SetShaftTape(RandomSkins.GetRandomShaftTape(player.Role.Value));
-            //var ai = player.NetworkObject.gameObject.AddComponent<GoalieAI>();
-            //ai.controlledPlayer = player;
-            //ai.team = player.Team.Value;
-            //ai.puckTransform = NetworkBehaviourSingleton<PuckManager>
-            //    .Instance.GetPlayerPuck(NetworkBehaviourSingleton<PuckManager>.Instance.OwnerClientId)
-            //    ?.transform;
-            //ai.puckTransform = FindObjectOfType<Puck>()?.transform;
-            //player.PlayerBody.Rigidbody.isKinematic = true;
-            //player.PlayerInput.Client_SlideInputRpc(true);
-            FakePlayerRegistry.Register(player);
+            if (body != null)
+            {
+                var mesh = body.PlayerMesh;
+                if (mesh != null)
+                {
+                    mesh.SetJerseyID(0, player.Team);
+                    mesh.SetNumber(player.Number.Value.ToString());
+                    mesh.SetUsername(player.Username.Value.ToString());
+                    if (mesh.PlayerHead != null)
+                    {
+                        mesh.PlayerHead.SetMustacheID(0);
+                        mesh.PlayerHead.SetFlagID(0);
+                        mesh.PlayerHead.SetHeadgearID(0, player.Role);
+                        mesh.PlayerHead.SetBeardID(0);
+                    }
+                }
+                if (body.Stick != null && body.Stick.StickMesh != null)
+                {
+                    var stickMesh = body.Stick.StickMesh;
+                    stickMesh.SetBladeTapeID(0);
+                    stickMesh.SetSkinID(0, player.Team);
+                    stickMesh.SetShaftTapeID(0);
+                }
+            }
             //Goalies.GoaliesAreRunning = true;
             //NetworkBehaviourSingleton<UIScoreboard>.Instance.RemovePlayer(player);
             //NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(player);
@@ -126,53 +103,28 @@ namespace PuckAIPractice.Utilities
             var playerManager = PlayerManager.Instance;
             if (playerManager == null)
             {
-                //Debug.LogError("[FAKE_SPAWN] PlayerManager.Instance was null!");
                 return;
             }
 
             var prefab = Traverse.Create(playerManager).Field("playerPrefab").GetValue<Player>();
             if (prefab == null)
             {
-                //Debug.LogError("[FAKE_SPAWN] Could not access playerPrefab from PlayerManager!");
                 return;
             }
-            //Debug.Log("Got player instance?");
             var playerObj = UnityEngine.Object.Instantiate(prefab);
             var netObj = playerObj.GetComponent<NetworkObject>();
 
             ulong fakeClientId = 7777777UL + (ulong)(team == PlayerTeam.Red ? 1 : 0);
             botIndex++;
+            FakePlayerRegistry.ReserveFakeClientId(fakeClientId);
             netObj.SpawnWithOwnership(fakeClientId, true);
 
             var player = playerObj.GetComponent<Player>();
             player.Username.Value = $"demBot{team.ToString()}_{(team == PlayerTeam.Red ? GoalieSettings.InstanceRed.Difficulty.ToString() : GoalieSettings.InstanceBlue.Difficulty.ToString())}";
-            player.Team.Value = team;
+            player.Server_SetGameState(team: team, role: role);
             player.Number.Value = 7;
-            player.Role.Value = role;
-            string randomJersey = RandomSkins.GetRandomJersey();
-            string randomStick = RandomSkins.GetRandomStickSkin(role);
-            string randomShaftTape = RandomSkins.GetRandomShaftTape(role);
-            string randomBladeTape = RandomSkins.GetRandomBladeTape(role);
-            string randomMustache = RandomSkins.GetRandomMustache();
-            string randomBeard = RandomSkins.GetRandomBeard();
-            string flag = RandomSkins.GetRandomCountry();
-            string visor = RandomSkins.GetRandomVisor();
-            player.JerseyGoalieRedSkin.Value = new FixedString32Bytes(randomJersey);
-            player.JerseyGoalieBlueSkin.Value = new FixedString32Bytes(randomJersey);
-            player.StickGoalieRedSkin.Value = new FixedString32Bytes(randomStick);
-            player.StickGoalieBlueSkin.Value = new FixedString32Bytes(randomStick);
-            player.StickBladeGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
-            player.StickBladeGoalieRedTapeSkin.Value = new FixedString32Bytes(randomBladeTape);
-            player.StickShaftGoalieBlueTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
-            player.StickShaftGoalieRedTapeSkin.Value = new FixedString32Bytes(randomShaftTape);
-            player.Mustache.Value = new FixedString32Bytes(randomMustache);
-            player.Beard.Value = new FixedString32Bytes(randomBeard);
-            player.Country.Value = new FixedString32Bytes(flag);
-            player.VisorAttackerBlueSkin.Value = new FixedString32Bytes(visor);
-            player.VisorAttackerRedSkin.Value = new FixedString32Bytes(visor);
-            player.VisorGoalieBlueSkin.Value = new FixedString32Bytes(visor);
-            player.VisorGoalieRedSkin.Value = new FixedString32Bytes(visor);
-            var position = GetNextUnclaimedPosition(player.Team.Value, player.Role.Value);
+            player.CustomizationState.Value = new PlayerCustomizationState();
+            var position = GetNextUnclaimedPosition(player.Team, player.Role);
             //player.PlayerPosition = new PlayerPosition();
             //player.PlayerPosition.Name = "G";
         //    MonoBehaviourSingleton<EventManager>.Instance.TriggerEvent("Event_OnPlayerPositionChanged", new Dictionary<string, object>
@@ -190,87 +142,75 @@ namespace PuckAIPractice.Utilities
         //        position
         //    }
         //});
+            FakePlayerRegistry.Register(player, team);
+            Goalies.GoaliesAreRunning = true;
+
             if (NetworkManager.Singleton.IsServer)
             {
-                if (playerObj.IsCharacterPartiallySpawned)
-                {
+                if (playerObj.IsCharacterSpawned)
                     playerObj.Server_DespawnCharacter();
-                    playerObj.Server_SpawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), role);
-                    return;
-                }
-                else
+                playerObj.Server_SpawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), role);
+            }
+
+            var body = player.PlayerBody;
+            if (body != null)
+            {
+                Vector3 neutralForward = (player.Team == PlayerTeam.Red) ? Vector3.forward : Vector3.back;
+                Vector3 adjustedPosition = (team == PlayerTeam.Red ? redGoal : blueGoal) + neutralForward * (team == PlayerTeam.Red ? GoalieSettings.InstanceRed.DistanceFromNet : GoalieSettings.InstanceBlue.DistanceFromNet);
+                adjustedPosition.y = player.transform.position.y;
+                player.transform.position = adjustedPosition;
+                body.Rigidbody.position = adjustedPosition;
+                body.Rigidbody.isKinematic = true;
+
+                var mesh = body.PlayerMesh;
+                if (mesh != null)
                 {
-                    playerObj.Server_SpawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), role);
+                    mesh.SetJerseyID(0, player.Team);
+                    mesh.SetNumber(player.Number.Value.ToString());
+                    mesh.SetUsername(player.Username.Value.ToString());
+                    if (mesh.PlayerHead != null)
+                    {
+                        mesh.PlayerHead.SetMustacheID(0);
+                        mesh.PlayerHead.SetFlagID(0);
+                        mesh.PlayerHead.SetHeadgearID(0, player.Role);
+                        mesh.PlayerHead.SetBeardID(0);
+                    }
+                }
+
+                if (body.Stick != null && body.Stick.StickMesh != null)
+                {
+                    var stickMesh = body.Stick.StickMesh;
+                    stickMesh.SetBladeTapeID(0);
+                    stickMesh.SetSkinID(0, player.Team);
+                    stickMesh.SetShaftTapeID(0);
                 }
             }
-            //playerObj.Server_RespawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), PlayerRole.Goalie);
-            //position.Server_Claim(player);
-            // Nudge goalie back toward the goal slightly to reduce open angles
-            Vector3 neutralForward = (player.Team.Value == PlayerTeam.Red) ? Vector3.forward : Vector3.back;
-            Vector3 adjustedPosition = (team == PlayerTeam.Red ? redGoal : blueGoal) + neutralForward * (team == PlayerTeam.Red ? GoalieSettings.InstanceRed.DistanceFromNet : GoalieSettings.InstanceBlue.DistanceFromNet);
-            adjustedPosition.y = player.transform.position.y; // maintain height
-            player.transform.position = adjustedPosition;
-            player.PlayerBody.Rigidbody.position = adjustedPosition; // sync rigidbody position too
-            var body = player.PlayerBody;
-            var mesh = body.PlayerMesh;
-            var stickMesh = body.Stick.StickMesh;
-            //Debug.Log("Player Jersey - " + player.GetPlayerJerseySkin().Value.ToString());
-            mesh.SetJersey(player.Team.Value, randomJersey);
-            mesh.SetNumber(player.Number.Value.ToString());
-            mesh.SetUsername(player.Username.Value.ToString());
-            mesh.SetRole(player.Role.Value);
-            mesh.PlayerHead.SetMustache(RandomSkins.GetRandomMustache());
-            mesh.PlayerHead.SetHelmetFlag(RandomSkins.GetRandomCountry());
-            mesh.PlayerHead.SetHelmetVisor(RandomSkins.GetRandomVisor());
-            mesh.PlayerHead.SetBeard(RandomSkins.GetRandomBeard());
-            stickMesh.SetBladeTape(RandomSkins.GetRandomBladeTape(player.Role.Value));
-            stickMesh.SetSkin(player.Team.Value, RandomSkins.GetRandomStickSkin(player.Role.Value));
-            stickMesh.SetShaftTape(RandomSkins.GetRandomShaftTape(player.Role.Value));
+
             var ai = player.NetworkObject.gameObject.AddComponent<GoalieAI>();
             ai.controlledPlayer = player;
-            ai.team = player.Team.Value;
-            ai.puckTransform = NetworkBehaviourSingleton<PuckManager>
-                .Instance.GetPlayerPuck(NetworkBehaviourSingleton<PuckManager>.Instance.OwnerClientId)
+            ai.team = player.Team;
+            ai.puckTransform = PuckManager.Instance
+                .GetPlayerPuck(NetworkManager.Singleton.LocalClientId)
                 ?.transform;
-            //ai.puckTransform = FindObjectOfType<Puck>()?.transform;
-            player.PlayerBody.Rigidbody.isKinematic = true;
-            //player.PlayerInput.Client_SlideInputRpc(true);
-            FakePlayerRegistry.Register(player);
-            Goalies.GoaliesAreRunning = true;
-            //NetworkBehaviourSingleton<UIScoreboard>.Instance.RemovePlayer(player);
-            NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(player);
-            //Debug.Log($"Player Count: {PlayerManager.Instance.GetPlayers(false).Count}");
-            UIScoreboard.Instance.UpdateServer(NetworkBehaviourSingleton<ServerManager>.Instance.Server, PlayerManager.Instance.GetPlayers(false).Count);
+
+            PlayerManager.Instance.RemovePlayer(player);
+            try
+            {
+                UIManager.Instance.Scoreboard.StyleServer(ServerManager.Instance.Server.Value, PlayerManager.Instance.GetPlayers(false).Count);
+            }
+            catch { }
             //DetectPositions.UpdateLabel(player);
             //Debug.Log($"[FAKE_SPAWN] Spawned {player.Username.Value} as {player.Role.Value} on {player.Team.Value}");
         }
         private static PlayerPosition GetNextUnclaimedPosition(PlayerTeam team, PlayerRole? role = null)
         {
-            var positionManager = PlayerPositionManager.Instance;
-            if (positionManager == null)
-            {
-                //Debug.LogError("[FAKE_SPAWN] PlayerPositionManager.Instance was null!");
+            var positions = UnityEngine.Object.FindObjectsOfType<PlayerPosition>();
+            if (positions == null || positions.Length == 0)
                 return null;
-            }
-
-            List<PlayerPosition> positions = null;
-
-            switch (team)
-            {
-                case PlayerTeam.Blue:
-                    positions = positionManager.BluePositions;
-                    break;
-                case PlayerTeam.Red:
-                    positions = positionManager.RedPositions;
-                    break;
-                default:
-                    //Debug.LogError($"[FAKE_SPAWN] Invalid team: {team}");
-                    return null;
-            }
 
             foreach (var pos in positions)
             {
-                if (!pos.IsClaimed && (!role.HasValue || pos.Role == role.Value))
+                if (pos.Team == team && !pos.IsClaimed && (!role.HasValue || pos.Role == role.Value))
                     return pos;
             }
 
@@ -287,11 +227,12 @@ namespace PuckAIPractice.Utilities
             }
             foreach (Player p in players)
             {
-                if (type == GoalieSession.Blue && p.Team.Value == PlayerTeam.Blue)
+                var botTeam = FakePlayerRegistry.GetTeam(p);
+                if (type == GoalieSession.Blue && botTeam == PlayerTeam.Blue)
                 {
                     Despawn(p);
                 }
-                else if (type == GoalieSession.Red && p.Team.Value == PlayerTeam.Red)
+                else if (type == GoalieSession.Red && botTeam == PlayerTeam.Red)
                 {
                     Despawn(p);
                 }
@@ -305,16 +246,22 @@ namespace PuckAIPractice.Utilities
         }
         public static void Despawn(Player p)
         {
-            p.Server_DespawnCharacter();
-            p.NetworkObject.Despawn(true);
             FakePlayerRegistry.Unregister(p);
-            p.Team.Value = PlayerTeam.None;
-            NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(p);
-            //Debug.Log("Removed Bot From Game");
-            //EventManager.TriggerEvent("Event_Server_OnPlayerDespawned", new Dictionary<string, object> { { "player", p } });
+            try
+            {
+                p.Server_DespawnCharacter();
+                p.Server_SetGameState(team: PlayerTeam.None);
+                PlayerManager.Instance.RemovePlayer(p);
+                p.NetworkObject.Despawn(true);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.Log($"[BotSpawning] Despawn error: {ex.Message}");
+            }
         }
         public static void DetectOpenGoalAndSpawnBot()
         {
+            FakePlayerRegistry.CleanupDestroyed();
 
             List<Player> players = PlayerManager.Instance.GetPlayers(false);
             bool hasBlueGoalie = false;
@@ -326,32 +273,29 @@ namespace PuckAIPractice.Utilities
             List<Player> bots = FakePlayerRegistry.All.ToList();
             foreach (Player b in bots)
             {
-                if (b.Team.Value == PlayerTeam.Blue)
+                if (b == null) continue;
+                var botTeam = FakePlayerRegistry.GetTeam(b);
+                if (botTeam == PlayerTeam.Blue)
                 {
-                    //Debug.Log("Has Blue Bot: " + b.Username.Value);
                     hasBlueBot = true;
                     blueBot = b;
                 }
-                else
+                else if (botTeam == PlayerTeam.Red)
                 {
-                    //Debug.Log("Has Red Bot: " + b.Username.Value);
                     hasRedBot = true;
                     redBot = b;
                 }
             }
             foreach (Player p in players)
             {
-                //Debug.Log($"Player Count: {players.Count()}");
-                if (p.Role.Value == PlayerRole.Goalie && p.IsSpawned && p.PlayerBody != null)
+                if (p.Role == PlayerRole.Goalie && p.IsSpawned && p.PlayerBody != null)
                 {
-                    if (p.Team.Value == PlayerTeam.Red)
+                    if (p.Team == PlayerTeam.Red)
                     {
-                        //Debug.Log("Has Red Goalie: " + p.Username.Value);
                         hasRedGoalie = true;
                     }
                     else
                     {
-                        //Debug.Log("Has Blue Goalie: " + p.Username.Value);
                         hasBlueGoalie = true;
                     }
                 }
@@ -360,7 +304,6 @@ namespace PuckAIPractice.Utilities
             {
                 if (hasBlueBot)
                 {
-                    //Debug.Log("Despawning Blue Bot");
                     BotSpawning.Despawn(blueBot);
                     blueGoalieSpawned = false;
                 }
@@ -369,7 +312,6 @@ namespace PuckAIPractice.Utilities
             {
                 if (!hasBlueBot)
                 {
-                    //Debug.Log("Spawning Blue Bot");
                     BotSpawning.SpawnFakePlayer(0, PlayerRole.Goalie, PlayerTeam.Blue);
                     blueGoalieSpawned = true;
                 }
@@ -378,7 +320,6 @@ namespace PuckAIPractice.Utilities
             {
                 if (hasRedBot)
                 {
-                    //Debug.Log("Spawning Red Bot");
                     BotSpawning.Despawn(redBot);
                     redGoalieSpawned = false;
                 }
@@ -391,10 +332,6 @@ namespace PuckAIPractice.Utilities
                     redGoalieSpawned = true;
                 }
             }
-            // Optionally, you can prevent the original method from running by returning false
-            // return false;
-
-            // Return true to allow the original method to execute after the prefix
         }
     }
 }

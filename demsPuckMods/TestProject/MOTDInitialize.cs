@@ -11,6 +11,8 @@ using MOTD.Singletons;
 using System.IO;
 using Newtonsoft.Json;
 using TestProject.Singletons;
+using UnityEngine;
+using UnityEngine.Rendering;
 namespace MOTD
 {
     public class MOTDInitialize : IPuckMod
@@ -25,11 +27,11 @@ namespace MOTD
 
         public bool OnEnable()
         {
-
             harmony.PatchAll();
-            ModConfig.Initialize();
+            MOTD.Config.MOTDConfig.Initialize();
             ConfigData.Load();
-            SimpleModal.Install();
+            if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null)
+                SimpleModal.Install();
             return true;
         }
     }

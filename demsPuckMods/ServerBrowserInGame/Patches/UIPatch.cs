@@ -3,6 +3,7 @@ using PuckAIPractice.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -11,7 +12,8 @@ using UnityEngine.UIElements;
 
 namespace PuckAIPractice.Patches
 {
-    [HarmonyPatch(typeof(UIServerBrowser), "OnClickClose")]
+    // PuckNew: OnClickClose renamed to OnServerBrowserClickClose
+    [HarmonyPatch(typeof(UIServerBrowser), "OnServerBrowserClickClose")]
     static class UIServerBrowser_OnClickClose_Prefix
     {
         static bool Prefix(UIServerBrowser __instance)
@@ -38,9 +40,17 @@ namespace PuckAIPractice.Patches
             return false;
         }
     }
-    [HarmonyPatch(typeof(UIManagerInputs), "OnPauseActionPerformed", new Type[] { typeof(InputAction.CallbackContext) })]
+    // PuckNew: OnPauseActionPerformed moved from UIManagerInputs → UIManager (private).
+    // TargetMethod resolves at runtime so this compiles against old libs too.
+    [HarmonyPatch]
     static class UIManagerInput_OnPauseActionPerformed_Prefix
     {
+        static MethodBase TargetMethod()
+        {
+            var type = AccessTools.TypeByName("UIManagerInputs") ?? AccessTools.TypeByName("UIManager");
+            return type == null ? null : AccessTools.Method(type, "OnPauseActionPerformed");
+        }
+
         static bool Prefix(InputAction.CallbackContext context)
         {
             var ui = UIManager.Instance;
