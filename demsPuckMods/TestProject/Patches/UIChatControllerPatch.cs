@@ -186,13 +186,14 @@ namespace MOTD.Patches
                     SimpleModal.Show(
                         title: doc.ModalDoc.title,
                         richText: ModalDocIO.MdToUnity(doc.ModalDoc.richText),
-                        dontShowKey: "",
+                        dontShowKey: "MOTD",
                         bannerUrl: doc.ModalDoc.bannerImageUrl,
                         panelBgUrl: doc.ModalDoc.panelImageUrl,
                         height: doc.ModalDoc.panelHeightPercent,
                         width: doc.ModalDoc.panelWidthPercent,
                         theme: doc.Theme,
-                        doc: doc.ModalDoc);
+                        doc: doc.ModalDoc,
+                        version: doc.Version);
                 }
                 else
                 {

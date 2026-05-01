@@ -1,0 +1,141 @@
+[h1]SceneryLoader - Custom Arenas for Puck[/h1]
+
+Replace the default Puck arena with fully custom scenes built from Unity asset bundles. Add your own lighting, skyboxes, music, ambient audio, and more.
+
+[h2]Features[/h2]
+
+[h3]Custom Arenas[/h3]
+Load any Unity asset bundle as a replacement for the default hangar. The mod strips the original arena geometry, lighting, and reflections, then instantiates your custom prefab in its place. Spectator positions defined in your prefab are automatically detected and populated.
+
+[h3]Glass Control[/h3]
+Toggle rink glass on or off per scene. Some environments look better without the glass barriers.
+
+[h3]Custom Lighting[/h3]
+Override the game's ambient light with a configurable multiplier. Darken the arena for an indoor atmosphere or brighten it for an outdoor feel. Scene prefabs can include their own directional, point, and spot lights.
+
+[h3]Custom Skyboxes[/h3]
+Each bundle can include a skybox material that replaces the default sky, visible through any camera in the scene.
+
+[h3]Background Music[/h3]
+Add an MP3 file to play as looping background music in your custom scene. Volume is configured per-bundle in AssetInformation.json.
+
+[h3]Ambient Audio[/h3]
+Layer in a separate looping ambient audio track — crowd noise, rain, wind, or anything else — independent of the music track.
+
+[h3]In-Game Volume Commands[/h3]
+Players can adjust audio levels at any time using chat commands. When players connect to a server running a custom scene, they receive a chat message letting them know [b]/sl help[/b] is available.
+
+[list]
+[*] [b]/sl help[/b] — List all commands with current volume levels
+[*] [b]/slMusicVolume <0-100>[/b] — Adjust music volume
+[*] [b]/slAmbientVolume <0-100>[/b] — Adjust ambient audio volume
+[*] [b]/slGoalCrowdNoise <0-100>[/b] — Adjust goal crowd noise volume
+[/list]
+
+[h3]Encrypted Bundle Support[/h3]
+Bundles can be encrypted to [b].abx[/b] format for distribution. Provide the Base64 decryption key in the server config.
+
+[h2]Server Setup[/h2]
+
+[olist]
+[*] Install the mod into your server's [b]Plugins/SceneryLoader/[/b] folder.
+[*] On first launch, a [b]SceneryLoaderConfig.local.json[/b] file is created in [b]<PuckInstall>/Config/SceneryLoader/[/b].
+[*] Edit the config file to point at your desired bundle (see Server Config below).
+[*] Place your asset bundle files in the [b]Plugins/SceneryLoader/AssetBundles/[/b] folder along with their [b]AssetInformation.json[/b] and any audio files.
+[*] When a player connects, the server syncs the scene configuration to them automatically.
+[/olist]
+
+[h2]File Layout[/h2]
+
+[code]
+<PuckInstall>/
+  Plugins/SceneryLoader/
+    SceneryChanger.dll
+    SceneryLoaderConfig.json               (seed file, may be overwritten by workshop updates)
+    AssetBundles/
+      <bundlename>                         (asset bundle file)
+      <bundlename>.abx                     (encrypted bundle, optional)
+      AssetInformation.json                (per-bundle settings)
+      music.mp3                            (music file, optional)
+      ambient.mp3                          (ambient audio file, optional)
+  Config/SceneryLoader/
+    SceneryLoaderConfig.local.json         (active config, survives workshop updates)
+[/code]
+
+[h2]Server Config Reference[/h2]
+
+The [b]SceneryLoaderConfig.local.json[/b] file controls which scene the server loads.
+
+[code]
+{
+  "sceneInformation": {
+    "bundleName": "outdoorhockey",
+    "prefabName": "OutdoorHockey",
+    "skyboxName": "FS013_Rainy",
+    "useSceneLocally": false,
+    "contentKey64": ""
+  }
+}
+[/code]
+
+[table]
+[tr][th]Property[/th][th]Description[/th][/tr]
+[tr][td]bundleName[/td][td]Filename of the asset bundle in the AssetBundles folder (without extension).[/td][/tr]
+[tr][td]prefabName[/td][td]Name of the root prefab inside the bundle to instantiate.[/td][/tr]
+[tr][td]skyboxName[/td][td]Name of the skybox material inside the bundle. Leave empty for no skybox change.[/td][/tr]
+[tr][td]useSceneLocally[/td][td]If true, loads the scene in practice/local mode as well. If false, only loads in multiplayer.[/td][/tr]
+[tr][td]contentKey64[/td][td]Base64 decryption key for .abx encrypted bundles. Leave empty for unencrypted bundles.[/td][/tr]
+[/table]
+
+[h2]AssetInformation.json Reference[/h2]
+
+This file lives in the [b]AssetBundles[/b] folder alongside the bundle and controls per-scene behavior. All properties have sensible defaults — older bundles that only specify [b]useGlass[/b] will continue to work.
+
+[code]
+{
+  "useGlass": false,
+  "useCustomAmbient": true,
+  "ambientMultiplier": 0.35,
+  "musicEnabled": true,
+  "musicPath": "music.mp3",
+  "musicVolume": 0.5,
+  "ambientAudioEnabled": true,
+  "ambientAudioPath": "ambient.mp3",
+  "ambientAudioVolume": 0.3,
+  "goalCrowdNoiseVolume": 0.37
+}
+[/code]
+
+[table]
+[tr][th]Property[/th][th]Type[/th][th]Default[/th][th]Description[/th][/tr]
+[tr][td]useGlass[/td][td]bool[/td][td]true[/td][td]Show or hide the rink glass barriers.[/td][/tr]
+[tr][td]useCustomAmbient[/td][td]bool[/td][td]false[/td][td]Enable custom ambient light override.[/td][/tr]
+[tr][td]ambientMultiplier[/td][td]float[/td][td]1.0[/td][td]Ambient light intensity multiplier. Values below 1 darken, above 1 brighten.[/td][/tr]
+[tr][td]musicEnabled[/td][td]bool[/td][td]false[/td][td]Enable looping background music.[/td][/tr]
+[tr][td]musicPath[/td][td]string[/td][td]""[/td][td]Filename of the MP3 file in the AssetBundles folder.[/td][/tr]
+[tr][td]musicVolume[/td][td]float[/td][td]0.5[/td][td]Music volume (0.0 to 1.0). Players can override this with /slMusicVolume.[/td][/tr]
+[tr][td]ambientAudioEnabled[/td][td]bool[/td][td]false[/td][td]Enable a separate looping ambient audio track.[/td][/tr]
+[tr][td]ambientAudioPath[/td][td]string[/td][td]""[/td][td]Filename of the ambient MP3 file in the AssetBundles folder.[/td][/tr]
+[tr][td]ambientAudioVolume[/td][td]float[/td][td]0.3[/td][td]Ambient audio volume (0.0 to 1.0). Players can override this with /slAmbientVolume.[/td][/tr]
+[tr][td]goalCrowdNoiseVolume[/td][td]float[/td][td]0.37[/td][td]Goal celebration crowd noise volume (0.0 to 1.0). Players can override this with /slGoalCrowdNoise.[/td][/tr]
+[/table]
+
+[h2]For Scene Creators[/h2]
+
+Scenes are built using the Unity Editor tooling included in the companion project. The [b]Build Selected Bundle[/b] window ([b]Tools > Bundles[/b]) lets you configure all scene properties and outputs:
+
+[list]
+[*] The asset bundle file
+[*] An AssetInformation.json sidecar with all settings
+[*] Copies of any referenced audio files
+[/list]
+
+Your prefab can include:
+[list]
+[*] Arena geometry and props
+[*] Directional, point, and spot lights
+[*] A skybox material
+[*] GameObjects named as spectator positions (automatically detected)
+[/list]
+
+All settings in AssetInformation.json are backwards compatible — older bundles that only specify [b]useGlass[/b] will continue to work with sensible defaults for all other properties.

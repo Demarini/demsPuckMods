@@ -12,6 +12,9 @@ namespace TestProject.Singletons
 {
     public sealed class MOTDSettings
     {
+        [JsonProperty("version")]
+        public int Version { get; set; }
+
         [JsonProperty("modalDoc")]
         public ModalDoc ModalDoc { get; set; }
 

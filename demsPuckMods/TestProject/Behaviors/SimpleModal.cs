@@ -44,16 +44,17 @@ namespace MOTD.Behaviors
 
         public static void Show(string title, string richText, string dontShowKey,
                         Action<VisualElement> build = null,
-                        string bannerUrl = null, string panelBgUrl = null, float height = 50, float width = 50, ThemeDto theme = null, ModalDoc doc = null)
+                        string bannerUrl = null, string panelBgUrl = null, float height = 50, float width = 50, ThemeDto theme = null, ModalDoc doc = null, int version = 0)
         {
-            if (!string.IsNullOrEmpty(dontShowKey) && ModalPrefs.GetHide(dontShowKey)) return;
-            _impl?.RequestShow(title, richText, build, dontShowKey, bannerUrl, panelBgUrl, height, width, theme, doc);
+            if (!string.IsNullOrEmpty(dontShowKey) && version > 0
+                && ModalPrefs.GetDismissedVersion(dontShowKey) >= version)
+                return;
+            _impl?.RequestShow(title, richText, build, dontShowKey, bannerUrl, panelBgUrl, height, width, theme, doc, version);
         }
         public static void ShowFromFile(string title, string filePath, string dontShowKey = null)
         {
             try
             {
-                if (!string.IsNullOrEmpty(dontShowKey) && ModalPrefs.GetHide(dontShowKey)) return;
                 var txt = System.IO.File.ReadAllText(filePath, Encoding.UTF8);
                 _impl?.RequestShow(title, txt, null, dontShowKey);
             }
@@ -124,6 +125,8 @@ namespace MOTD.Behaviors
         Label _optOutLabel;
         string _optOutKey;                   // current modal’s key (null/empty if none)
         string _pendingOptOutKey;
+        int _currentVersion;
+        int _pendingVersion;
         VisualElement _overlay, _panel, _body, _footer;
         Label _title;
         ScrollView _scroll;
@@ -435,10 +438,11 @@ namespace MOTD.Behaviors
             _built = true;
             if (_hasPending)
             {
-                DoShow(_pendingTitle, _pendingRich, _pendingBuild, _pendingOptOutKey, _pendingBannerUrl, _pendingPanelBgUrl);
+                DoShow(_pendingTitle, _pendingRich, _pendingBuild, _pendingOptOutKey, _pendingBannerUrl, _pendingPanelBgUrl, version: _pendingVersion);
                 _hasPending = false;
                 _pendingTitle = _pendingRich = _pendingOptOutKey = _pendingPanelBgUrl = null;
                 _pendingBuild = null;
+                _pendingVersion = 0;
             }
         }
         void StartCloseCooldown(int seconds, bool blockEsc, bool blockOutsideClicks)
@@ -543,15 +547,6 @@ namespace MOTD.Behaviors
                     fb.button.style.display = ok ? DisplayStyle.Flex : DisplayStyle.None;
                 }));
             }
-            _optOutKey = "test";
-
-            // show/hide opt-out row
-            bool hasOpt = !string.IsNullOrEmpty(_optOutKey);
-            _optGroup.style.display = hasOpt ? DisplayStyle.Flex : DisplayStyle.None;
-            if (hasOpt)
-            {
-                _optOutToggle.value = ModalPrefs.GetHide(_optOutKey); // load persisted state
-            }
             // Add to the footer (left lane)
             _footLeft.style.display = DisplayStyle.Flex;
             _footLeft.Add(fb.button);
@@ -609,18 +604,19 @@ namespace MOTD.Behaviors
             b.style.flexGrow = 0; b.style.flexShrink = 0;
         }
         public void RequestShow(string title, string richText, Action<VisualElement> build,
-                        string optOutKey = null, string bannerUrl = null, string panelBgUrl = null, float height = 50, float width = 50, ThemeDto theme = null, ModalDoc doc = null)
+                        string optOutKey = null, string bannerUrl = null, string panelBgUrl = null, float height = 50, float width = 50, ThemeDto theme = null, ModalDoc doc = null, int version = 0)
         {
             if (_built)
-                DoShow(title, richText, build, optOutKey, bannerUrl, panelBgUrl, height, width, theme, doc); // <-- pass it
+                DoShow(title, richText, build, optOutKey, bannerUrl, panelBgUrl, height, width, theme, doc, version);
             else
             {
                 _pendingTitle = title;
                 _pendingRich = richText;
                 _pendingBuild = build;
                 _pendingOptOutKey = optOutKey;
-                _pendingPanelBgUrl = panelBgUrl;   // keep for later
+                _pendingPanelBgUrl = panelBgUrl;
                 _pendingTheme = theme;
+                _pendingVersion = version;
                 _hasPending = true;
             }
         }
@@ -634,9 +630,16 @@ namespace MOTD.Behaviors
     float height = 50f,
     float width = 50f,
     ThemeDto theme = null,
-    ModalDoc doc = null)
+    ModalDoc doc = null,
+    int version = 0)
         {
             _optOutKey = optOutKey;
+            _currentVersion = version;
+
+            bool hasOpt = !string.IsNullOrEmpty(_optOutKey) && _currentVersion > 0;
+            _optGroup.style.display = hasOpt ? DisplayStyle.Flex : DisplayStyle.None;
+            if (hasOpt)
+                _optOutToggle.value = false;
 
             // Theme (if provided)
             if (theme != null)
@@ -951,9 +954,8 @@ namespace MOTD.Behaviors
         {
             if (_overlay == null) return;
 
-            // commit opt-out if this modal had a key
-            if (!string.IsNullOrEmpty(_optOutKey))
-                ModalPrefs.SetHide(_optOutKey, _optOutToggle.value);
+            if (!string.IsNullOrEmpty(_optOutKey) && _optOutToggle.value && _currentVersion > 0)
+                ModalPrefs.SetDismissedVersion(_optOutKey, _currentVersion);
 
             _overlay.visible = false;
             _overlay.style.display = DisplayStyle.None;
