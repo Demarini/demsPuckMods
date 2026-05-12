@@ -13,7 +13,7 @@ using UnityEngine;
 
 namespace demsInputControl
 {
-    public class InitializeInputControl : IPuckMod
+    public class InitializeInputControl : IPuckPlugin
     {
         private static readonly Harmony harmony = new Harmony("GAFURIX.InputControl");
 

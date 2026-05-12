@@ -15,7 +15,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 namespace MOTD
 {
-    public class MOTDInitialize : IPuckMod
+    public class MOTDInitialize : IPuckPlugin
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.MOTD");
         public bool OnDisable()

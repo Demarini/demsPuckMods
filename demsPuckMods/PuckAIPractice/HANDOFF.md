@@ -1,197 +1,142 @@
-# PuckAIPractice — Goalie Duplication Bug & Refactor Handoff
+# PuckAIPractice — Handoff
 
 ## Status
-Research complete. Root cause identified. Fix not yet implemented.
+
+**Duplicate-goalie bug:** Fixed and shipped 2026-05-12.
+**Bot visibility in replay:** Trade-off accepted — bot is invisible in subsequent replays after the first one. Documented below as the next thing to fix when someone has time.
 
 ---
 
-## The Bug: Duplicate Goalie During Replay
+## What was wrong (the duplicate-goalie bug)
+
+When a goal was scored, sometimes a duplicate goalie appeared mid-ice during the replay and persisted afterward. Root cause was a race in `Patches/ReplayRecorderPatch.cs`:
+
+The 3 prefix patches that block bot spawn events from being captured into the replay recording (`BlockFakeBotPlayerSpawned` etc.) checked `FakePlayerRegistry.IsFake(player)` — which looks up the **Player object** in the registered set. But `BotSpawning.SpawnFakePlayer` calls `netObj.SpawnWithOwnership(fakeClientId, true)` (which fires the spawn event synchronously) *before* it calls `FakePlayerRegistry.Register(player, team)`. So at event time the Player wasn't yet registered → check returned false → event wasn't blocked → recorder captured the spawn → during replay, `Server_ReplayEvent("PlayerSpawned")` instantiated a duplicate bot.
+
+## Fix that shipped
+
+Switched the prefix patches to `FakePlayerRegistry.IsFakeClientId(player.OwnerClientId)`. The fake client IDs (`7777777`, `7777778`) are reserved via `ReserveFakeClientId` *before* the spawn happens, so the check correctly identifies bots at event time. Three patches updated:
+- `BlockFakeBotPlayerSpawned`
+- `BlockFakeBotPlayerBodySpawned`
+- `BlockFakeBotStickSpawned`
+
+All also got null-defensive guards (`player == null`, `playerBody.Player == null`, `stick.Player == null`).
+
+Verified live on server3 (with workshop mod disabled, local DLL deployed). Duplicate no longer appears.
+
+---
+
+## Known remaining issue: invisible goalie in subsequent replays
 
 ### Symptom
-When a goal is scored and the replay plays, sometimes the AI goalie appears
-twice — once at its pre-replay position and once being moved by the replay
-system. After the replay ends, the duplicate persists in the middle of the ice.
 
-### Root Cause
+First goal of a session: replay shows the goalie correctly.
+Every subsequent goal's replay: no goalie visible at all (bot still functions in live gameplay between goals — just absent from the replay viewer).
 
-The game uses an event-driven system to capture spawns into the replay recording.
-`ReplayRecorderController` (game source: `PuckNew/ReplayRecorderController.cs`)
-listens to `Event_Everyone_OnPlayerSpawned` and `Event_Everyone_OnPlayerBodySpawned`.
-When these events fire, it calls `replayRecorder.Server_AddPlayerSpawnedEvent(player)`.
+### Root cause hypothesis
 
-When `BotSpawning.SpawnFakePlayer` runs:
-1. `netObj.SpawnWithOwnership(fakeClientId, true)` fires `Event_Everyone_OnPlayerSpawned`
-2. `playerObj.Server_SpawnCharacter(...)` fires `Event_Everyone_OnPlayerBodySpawned`
-
-Both events are intercepted by `ReplayRecorderController` **before** the mod's
-subsequent `PlayerManager.RemovePlayer(player)` call. If the recorder is already
-active at spawn time, `PlayerSpawned` and `PlayerBodySpawned` events for the bot
-get written into the recording.
-
-During replay (`ReplayPlayer.Server_ReplayEvent`):
-- `PlayerSpawned` → `PlayerManager.Server_SpawnPlayer(..., isReplay: true)` →
-  a **new replay copy** of the bot is created
-- `PlayerBodySpawned` → a body is spawned for the replay copy
-- `PlayerBodyMove` events (from `ReplayRecorder_Server_Tick_Postfix`) → replay
-  copy moves correctly
-
-The **original real bot** is still alive on the ice at the same time.
-Two goalies are on the ice. When `Server_DisposeReplayObjects()` runs after the
-replay, the replay copy is cleaned up — but it may not be found in
-`PlayerManager.GetReplayPlayers()` because the bot's `OwnerClientId` (7777778/9)
-was removed from `PlayerManager` via `RemovePlayer()`. If cleanup misses it,
-the replay copy persists.
-
-### Why "sometimes"
-- If the bot was spawned **before** the recording started: `Server_StartRecording`
-  calls `GetPlayers(false)`, which the `ExcludeFakePlayersFromGetPlayers` patch
-  filters. No spawn event recorded → no replay copy → no duplication.
-- If the bot was spawned (or respawned) **while** recording is active (e.g. the
-  user issued `/goalies` mid-period): the event fires and is captured → duplication.
-
----
-
-## Current Workaround
-Goalies are hidden during the `GamePhase.Replay` phase entirely. This avoids
-the visual duplication but means you can't see the goalie in legitimate replays.
-The hiding code was not found in the current source (may have been removed, or
-lives in a Harmony patch that was since commented out).
-
----
-
-## Fix Plan
-
-### Step 1 — Block fake player events from the recorder
-Patch `ReplayRecorderController` to skip fake players:
+`ReplayRecorder_Server_StartRecording_Postfix` (Step 2 of the original fix plan) injects bot spawn events into the recording at start. But it conditionally injects body/stick:
 
 ```csharp
-[HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnPlayerSpawned")]
-static class BlockFakeBotPlayerSpawned
-{
-    static bool Prefix(Dictionary<string, object> message)
-    {
-        var player = (Player)message["player"];
-        return !FakePlayerRegistry.IsFake(player); // skip if fake
-    }
-}
-
-// Same pattern for Event_Everyone_OnPlayerBodySpawned
-// Same pattern for Event_Everyone_OnStickSpawned
+__instance.Server_AddPlayerSpawnedEvent(player);   // always
+if (player.PlayerBody)                              // conditional
+    __instance.Server_AddPlayerBodySpawnedEvent(player.PlayerBody);
+if (player.Stick)                                   // conditional
+    __instance.Server_AddStickSpawnedEvent(player.Stick);
 ```
 
-This stops the duplication. Bots will be invisible in replays (same as current
-workaround) but without the duplication risk.
+Logs show `[ReplayRecorder] Replay recording started` and `Goalie AI Started` (from `PhaseChangePatch` re-enabling the AI) firing in the **same millisecond** at the boundary between replay-end and next-recording-start. If `PlayerBody` or `Stick` references are transiently null during that AI re-enable tick, only the bare `Player` event is injected — replay system has nothing to render, goalie appears missing.
 
-### Step 2 — Make bots visible in replays (optional, full fix)
-To properly show bots in replays, manually inject their spawn events at
-recording-start time (when `Server_StartRecording` runs), so they're in the
-initial snapshot instead of mid-recording:
+First replay works because game start gives the bots a long warmup period before any replay happens, so the first recording-start catches them fully-formed.
+
+### Suggested fix
+
+Either:
+
+**A) Defer injection until parts are ready.** Schedule a coroutine from the postfix that polls `player.PlayerBody`/`player.Stick` for a few ticks and injects events as they become non-null:
 
 ```csharp
-[HarmonyPatch(typeof(ReplayRecorder), "Server_StartRecording")]
-static class InjectFakePlayerSpawnEvents
+static IEnumerator DeferredInject(ReplayRecorder rec, Player player)
 {
-    static void Postfix(ReplayRecorder __instance)
+    int ticks = 0;
+    while (ticks++ < 30) // ~half second budget
     {
-        if (!NetworkManager.Singleton.IsServer) return;
-        foreach (Player bot in FakePlayerRegistry.All)
+        if (player.PlayerBody && player.Stick)
         {
-            __instance.Server_AddPlayerSpawnedEvent(bot);
-            if (bot.PlayerBody)
-                __instance.Server_AddPlayerBodySpawnedEvent(bot.PlayerBody);
-            if (bot.Stick)
-                __instance.Server_AddStickSpawnedEvent(bot.Stick);
+            rec.Server_AddPlayerBodySpawnedEvent(player.PlayerBody);
+            rec.Server_AddStickSpawnedEvent(player.Stick);
+            yield break;
         }
+        yield return null;
     }
 }
 ```
 
-With Steps 1+2:
-- Spawn events exist in the initial snapshot (not mid-recording)
-- Movement events (already recorded by `ReplayRecorder_Server_Tick_Postfix`) are
-  played back against the replay copy
-- Replay copy is cleaned up by `Server_DisposeReplayObjects()` via
-  `GetReplayPlayers()` — this should work since `Server_SpawnPlayer` with
-  `isReplay=true` registers the replay copy properly
+Drawback: needs a MonoBehaviour to host the coroutine, and "events injected late into a recording" may have its own ordering issues with the replay player.
 
-### Step 3 — Pause/hide the real bot during replay
-The original real bot must not run its AI or be visible while the replay copy
-plays. Hook into `GameManager.OnGameStateChanged` in the existing `PhaseChangePatch`:
+**B) Hook PlayerBody/Stick spawn events for fake bots.** Since the BlockFake* prefixes already see every player/body/stick spawn event, add a *parallel* postfix that re-injects them when the spawn is for a fake bot AND a recording is active:
 
 ```csharp
-// In PhaseChangePatch.Postfix:
-if (newGameState.Phase == GamePhase.Replay)
+[HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnPlayerBodySpawned")]
+static class InjectFakeBotPlayerBodySpawned
 {
-    foreach (Player bot in FakePlayerRegistry.All)
+    static void Postfix(Dictionary<string, object> message)
     {
-        var ai = bot.NetworkObject.GetComponent<GoalieAI>();
-        if (ai != null) ai.enabled = false;
-        // Optionally hide renderer too
-    }
-}
-else if (oldGameState.Phase == GamePhase.Replay)
-{
-    foreach (Player bot in FakePlayerRegistry.All)
-    {
-        var ai = bot.NetworkObject.GetComponent<GoalieAI>();
-        if (ai != null) ai.enabled = true;
+        var pb = (PlayerBody)message["playerBody"];
+        if (pb == null || pb.Player == null) return;
+        if (!FakePlayerRegistry.IsFakeClientId(pb.Player.OwnerClientId)) return;
+        var rec = ReplayRecorder.Instance; // or however the recorder is reached
+        if (rec != null && rec.IsRecording) rec.Server_AddPlayerBodySpawnedEvent(pb);
     }
 }
 ```
 
----
+Cleaner conceptually — "if a fake bot's body spawns while a recording is active, manually inject the event since our prefix blocked the controller from doing it." Same pattern for stick.
 
-## Files to Touch
+Option B is the recommendation. Avoids coroutines, uses the same hook points as the existing fix, and is symmetric with the prefix block patches.
 
-| File | Change |
-|------|--------|
-| `Patches/ReplayRecorderPatch.cs` | Add Prefix patches for `Event_Everyone_OnPlayerSpawned`, `Event_Everyone_OnPlayerBodySpawned`, `Event_Everyone_OnStickSpawned`; add Postfix on `Server_StartRecording` to inject fake player spawn events |
-| `InitializePuckAI.cs` | Add replay phase detection in `PhaseChangePatch.Postfix` to pause/resume GoalieAI |
-| `Utilities/BotSpawning.cs` | General cleanup (dead code, commented-out blocks); `SpawnChaser` and `SpawnFakePlayer` have very similar code that can share a helper |
-| `GameModes/Goalies.cs` | Minor cleanup only |
-| `Patches/ProcessChatCommands.cs` | Logic is tangled; `SpawnGoaliesBasedOffCommand` has inconsistent `GoaliesAreRunning` toggling |
+### Trade-off if not fixed
+
+Replays look like the goalie disappeared. Live gameplay is unaffected. Most replay viewers track the puck/scorer, not the goalie, so it's a minor cosmetic bug.
 
 ---
 
-## Key Classes & Methods (game source)
+## Cleanup punch-list (separate from bug fixes)
 
-| Symbol | Location | Role |
-|--------|----------|------|
-| `ReplayRecorderController.Event_Everyone_OnPlayerSpawned` | `PuckNew/ReplayRecorderController.cs:42` | Captures player spawns into recording — the entry point for the bug |
-| `ReplayRecorder.Server_StartRecording` | `PuckNew/ReplayRecorder.cs:33` | Takes initial player snapshot; fake players excluded by `GetPlayers` patch |
-| `ReplayRecorder.Server_AddPlayerSpawnedEvent` | `PuckNew/ReplayRecorder.cs:154` | Writes a `PlayerSpawned` event at the current tick |
-| `ReplayPlayer.Server_ReplayEvent` (case `"PlayerSpawned"`) | `PuckNew/ReplayPlayer.cs:443` | Calls `Server_SpawnPlayer(..., isReplay: true)` — this is what creates the duplicate |
-| `ReplayPlayer.Server_DisposeReplayObjects` | `PuckNew/ReplayPlayer.cs:533` | Iterates `GetReplayPlayers()` and despawns them — cleanup step |
-| `FakePlayerRegistry` | `Utilities/FakePlayerRegistry.cs` | Single source of truth for which players are bots |
-| `BotSpawning.SpawnFakePlayer` | `Utilities/BotSpawning.cs:120` | Spawns the network object — triggers the recording events |
+Not blockers, but accumulated tech debt worth addressing on a slow day:
+
+1. **Dead commented-out code.** `Patches/PlayerPatch.cs` is 100% commented and can be deleted. `InitializePuckAI.cs` has ~120 lines of commented Harmony patches (the SettingsManager skin-change loggers). `BotInputPatch.cs` likely has similar.
+
+2. **`SpawnChaser` vs `SpawnFakePlayer`** in `Utilities/BotSpawning.cs` — ~80% identical. Extract shared mesh/skin/setup into a private helper.
+
+3. **Stale `GoaliesAreRunning` flag.** Set to `true` in `InitializePuckAI.OnEnable()` before any bots are spawned, so it's an unreliable "are bots actually running" signal. `ProcessChatCommands` reads it to decide what to do — stale state causes wrong behavior. Fix: only set true after a successful spawn, set false after confirmed despawn.
+
+4. **`PhaseChangePatch` does the right thing now (Step 3 fix)** — previously did nothing. Just confirming it's no longer dead code.
+
+5. **Dead fields in `BotSpawning`:** `redGoalie`, `blueGoalie`, `blueGoalieSpawned`, `redGoalieSpawned` — declared, mostly unused. Compiler warned about these in the build output. Remove.
+
+6. **Early-return bug in `SpawnFakePlayer`.** The `IsCharacterPartiallySpawned` branch (~line 195 in old version, may have moved) returns early before registering the player in `FakePlayerRegistry` or attaching `GoalieAI`. If reachable, you'd get a bot with no AI. Verify reachability and fix.
+
+7. **`FakePlayerRegistry.CleanupDestroyed()` doesn't prune `fakeClientIds`** — only `fakePlayers` and `fakePlayerTeams`. Stale IDs accumulate. Tiny issue since IDs are fixed (7777777/7777778) and reused, but inconsistent.
 
 ---
 
-## Cleanup Notes (separate from bug fix)
+## Key files
 
-The code has a lot of technical debt to address alongside the fix:
+| File | Role |
+|---|---|
+| `InitializePuckAI.cs` | Mod entry point + `PhaseChangePatch` (Step 3 — pause AI during Replay) |
+| `Patches/ReplayRecorderPatch.cs` | All 3 replay-related patches (block prefixes + start-recording postfix + per-tick movement record) |
+| `Utilities/BotSpawning.cs` | `SpawnFakePlayer`, `SpawnChaser`, `Despawn`, `DetectOpenGoalAndSpawnBot` |
+| `Utilities/FakePlayerRegistry.cs` | Single source of truth for which players are bots (object set + reserved client ID set) |
+| `AI/GoalieAI.cs` | The actual goalie behavior MonoBehaviour |
 
-1. **Dead commented-out code** — `PlayerPatch.cs` is 100% commented out and can
-   be deleted. `ReplayRecorderPatch.cs` has large commented-out blocks to remove.
-   Same in `BotInputPatch.cs`.
+## Game-side classes referenced
 
-2. **`SpawnChaser` vs `SpawnFakePlayer`** — 80% identical code. Extract shared
-   skin/setup logic into a private helper.
-
-3. **Inconsistent `GoaliesAreRunning` state** — it's set to `true` in
-   `InitializePuckAI.OnEnable()` before any bots are spawned, making it unreliable
-   as a "bots are actually running" guard. `ProcessChatCommands` reads this flag
-   to decide whether to start or stop, so stale state causes wrong behavior.
-   Fix: only set `GoaliesAreRunning = true` after at least one bot is successfully
-   spawned; set `false` after all bots are confirmed despawned.
-
-4. **`PhaseChangePatch` does nothing** — currently just logs and returns. Either
-   give it real work (replay handling from Step 3 above) or remove it.
-
-5. **`BotSpawning.redGoalie` / `blueGoalie` / `blueGoalieSpawned` / `redGoalieSpawned`**
-   — declared but never used. Remove them.
-
-6. **Early-return bug in `SpawnFakePlayer`** — the `IsCharacterPartiallySpawned`
-   branch at line 195 returns early before registering the player in
-   `FakePlayerRegistry` or setting up `GoalieAI`. If that branch ever triggers
-   you get a bot with no AI. Verify this code path is actually reachable and fix.
+| Symbol | Source location | Role |
+|---|---|---|
+| `ReplayRecorderController.Event_Everyone_OnPlayerSpawned` | `PuckNew/ReplayRecorderController.cs` | Captures player spawns into the recording |
+| `ReplayRecorder.Server_StartRecording` | `PuckNew/ReplayRecorder.cs` | Starts a new recording, takes initial snapshot |
+| `ReplayRecorder.Server_AddPlayerSpawnedEvent` etc. | `PuckNew/ReplayRecorder.cs` | Manually inject events into the active recording |
+| `ReplayPlayer.Server_ReplayEvent` (case `"PlayerSpawned"`) | `PuckNew/ReplayPlayer.cs` | Spawns replay copies based on recorded events — was the source of the duplicate |
+| `ReplayPlayer.Server_DisposeReplayObjects` | `PuckNew/ReplayPlayer.cs` | Cleanup pass after replay ends |

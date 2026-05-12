@@ -16,7 +16,7 @@ using PuckAIPractice.Singletons;
 using PuckAIPractice.AI;
 namespace PuckAIPractice
 {
-    public class InitializePuckAI : IPuckMod
+    public class InitializePuckAI : IPuckPlugin
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.PuckAIPractice");
 

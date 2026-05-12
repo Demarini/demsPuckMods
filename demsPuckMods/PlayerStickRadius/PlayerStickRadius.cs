@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace PlayerStickRadius
 {
-    public class Class1 : IPuckMod
+    public class Class1 : IPuckPlugin
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.PlayerStickRadius");
 

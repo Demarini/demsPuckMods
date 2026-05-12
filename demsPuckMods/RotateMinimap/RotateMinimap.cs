@@ -151,7 +151,7 @@ namespace RotateMinimap
         }
     }
 
-    public class RotateMinimap : IPuckMod
+    public class RotateMinimap : IPuckPlugin
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.RotateMinimap");
 

@@ -1,0 +1,12 @@
+{
+    "useGlass": false,
+    "useCustomAmbient": false,
+    "ambientMultiplier": 1.0,
+    "musicEnabled": true,
+    "musicPath": "90sremix.mp3",
+    "musicVolume": 0.05400000140070915,
+    "ambientAudioEnabled": false,
+    "ambientAudioPath": "",
+    "ambientAudioVolume": 0.30000001192092898,
+    "goalCrowdNoiseVolume": 0.3700000047683716
+}

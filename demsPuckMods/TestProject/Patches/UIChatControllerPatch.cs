@@ -186,7 +186,7 @@ namespace MOTD.Patches
                     SimpleModal.Show(
                         title: doc.ModalDoc.title,
                         richText: ModalDocIO.MdToUnity(doc.ModalDoc.richText),
-                        dontShowKey: "MOTD",
+                        dontShowKey: BuildDismissKey(),
                         bannerUrl: doc.ModalDoc.bannerImageUrl,
                         panelBgUrl: doc.ModalDoc.panelImageUrl,
                         height: doc.ModalDoc.panelHeightPercent,
@@ -198,6 +198,37 @@ namespace MOTD.Patches
                 else
                 {
                     Debug.Log($"[MOTD] Failed to parse MOTD: {error}");
+                }
+            }
+
+            // Per-server dismissal key. Reads ConnectionManager.UnityTransport.ConnectionData
+            // via reflection so we don't bind to a specific transport assembly. Falls back to
+            // the generic "MOTD" key if anything is unavailable, preserving original behavior.
+            static string BuildDismissKey()
+            {
+                try
+                {
+                    var connMgrType = AccessTools.TypeByName("ConnectionManager");
+                    if (connMgrType == null) return "MOTD";
+                    var instance = AccessTools.PropertyGetter(connMgrType.BaseType, "Instance")?.Invoke(null, null);
+                    if (instance == null) return "MOTD";
+
+                    var transport = Traverse.Create(instance).Field("UnityTransport").GetValue();
+                    if (transport == null) return "MOTD";
+
+                    var connData = Traverse.Create(transport).Property("ConnectionData").GetValue();
+                    if (connData == null) return "MOTD";
+
+                    string address = Traverse.Create(connData).Field("Address").GetValue<string>();
+                    object portObj = Traverse.Create(connData).Field("Port").GetValue();
+                    if (string.IsNullOrEmpty(address) || portObj == null) return "MOTD";
+
+                    return $"MOTD@{address}:{portObj}";
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[MOTD] BuildDismissKey fallback to generic: {e.Message}");
+                    return "MOTD";
                 }
             }
 

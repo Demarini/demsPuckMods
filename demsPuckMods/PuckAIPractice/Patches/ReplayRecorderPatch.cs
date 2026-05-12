@@ -87,13 +87,18 @@ namespace PuckAIPractice
     // Step 1: Block bot player-spawned events from being written mid-recording.
     // Bots are injected at recording-start instead (see above), so mid-recording
     // events would create a second entry and cause the duplicate-goalie bug.
+    //
+    // Check by OwnerClientId, not by the Player object: SpawnWithOwnership fires
+    // PlayerSpawned synchronously before BotSpawning.SpawnFakePlayer has a chance
+    // to call FakePlayerRegistry.Register(player). The client ID is reserved before
+    // the spawn (ReserveFakeClientId), so it's the only reliable signal at this point.
     [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnPlayerSpawned")]
     static class BlockFakeBotPlayerSpawned
     {
         static bool Prefix(Dictionary<string, object> message)
         {
             var player = (Player)message["player"];
-            return !FakePlayerRegistry.IsFake(player);
+            return player == null || !FakePlayerRegistry.IsFakeClientId(player.OwnerClientId);
         }
     }
 
@@ -103,7 +108,8 @@ namespace PuckAIPractice
         static bool Prefix(Dictionary<string, object> message)
         {
             var playerBody = (PlayerBody)message["playerBody"];
-            return playerBody == null || !FakePlayerRegistry.IsFake(playerBody.Player);
+            return playerBody == null || playerBody.Player == null
+                || !FakePlayerRegistry.IsFakeClientId(playerBody.Player.OwnerClientId);
         }
     }
 
@@ -113,7 +119,8 @@ namespace PuckAIPractice
         static bool Prefix(Dictionary<string, object> message)
         {
             var stick = (Stick)message["stick"];
-            return stick == null || !FakePlayerRegistry.IsFake(stick.Player);
+            return stick == null || stick.Player == null
+                || !FakePlayerRegistry.IsFakeClientId(stick.Player.OwnerClientId);
         }
     }
 }

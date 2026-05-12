@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace FixChat
 {
-    public class FixChat : IPuckMod
+    public class FixChat : IPuckPlugin
     {
         private static readonly Harmony harmony = new Harmony("GAFURIX.FixChat");
 

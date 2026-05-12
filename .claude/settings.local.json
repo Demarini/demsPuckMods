@@ -11,7 +11,22 @@
       "Read(//c/Users/Tom/**)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(json.dumps\\(v.get\\('mcpServers',{}\\), indent=2\\)\\) for k,v in d.get\\('projects',{}\\).items\\(\\) if 'ssh-mcp' in str\\(v.get\\('mcpServers',{}\\)\\)]\")",
       "mcp__ssh-mcp__sudo-exec",
-      "mcp__ssh-mcp__exec"
+      "mcp__ssh-mcp__exec",
+      "PowerShell(dotnet nuget search *)",
+      "PowerShell(dotnet package search *)",
+      "Bash(mkdir \"C:\\\\Users\\\\Tom\\\\source\\\\repos\\\\YouTubePlaylistPlayer\")",
+      "Bash(dotnet new *)",
+      "Bash(dotnet sln *)",
+      "Bash(dotnet add *)",
+      "Bash(mkdir \"C:\\\\Users\\\\Tom\\\\source\\\\repos\\\\YouTubePlaylistPlayer\\\\YouTubePlaylistPlayer\\\\Models\")",
+      "Bash(mkdir \"C:\\\\Users\\\\Tom\\\\source\\\\repos\\\\YouTubePlaylistPlayer\\\\YouTubePlaylistPlayer\\\\Services\")",
+      "Bash(mkdir \"C:\\\\Users\\\\Tom\\\\source\\\\repos\\\\YouTubePlaylistPlayer\\\\YouTubePlaylistPlayer\\\\Html\")",
+      "Bash(dotnet build *)",
+      "Bash(dotnet run *)",
+      "Bash(taskkill *)",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Get-Process *)",
+      "WebSearch"
     ]
   }
 }
