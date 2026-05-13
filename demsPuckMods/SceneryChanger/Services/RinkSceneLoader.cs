@@ -130,9 +130,153 @@ namespace SceneryChanger.Services
 
             // --- Spectators: search inside the staged prefab and tag positions ---
             yield return SpawnSpectatorsFromStagedRoot(stagedRoot, token);
-            
+
+            // --- Diagnostic: dump lighting/shadow state after everything settles ---
+            CoroutineRunner.Instance.StartCoroutine(DumpLightingStateDelayed(stagedRoot, 1.5f));
+
             // Optional cleanup of stray legacy objects AFTER swap
             //ClearLegacyOutsideContainer(); // see helper below (non-blocking)
+        }
+
+        static IEnumerator DumpLightingStateDelayed(GameObject stagedRoot, float delaySec)
+        {
+            yield return new WaitForSeconds(delaySec);
+            DumpLightingState(stagedRoot);
+        }
+
+        static void DumpLightingState(GameObject stagedRoot)
+        {
+            try
+            {
+                // ===== Render pipeline & quality =====
+                var pipeline = GraphicsSettings.currentRenderPipeline;
+                Debug.Log($"[SceneLoader][Light] Pipeline='{pipeline?.GetType().FullName ?? "BuiltIn"}' " +
+                          $"qShadows={QualitySettings.shadows} shadowDistance={QualitySettings.shadowDistance} " +
+                          $"cascades={QualitySettings.shadowCascades} shadowRes={QualitySettings.shadowResolution} " +
+                          $"projection={QualitySettings.shadowProjection} shadowmaskMode={QualitySettings.shadowmaskMode}");
+
+                // Probe URP/HDRP asset for shadow toggles via reflection (works without compile-time URP dep)
+                if (pipeline != null)
+                {
+                    var pType = pipeline.GetType();
+                    string[] interesting = {
+                        "supportsMainLightShadows", "mainLightShadowmapResolution",
+                        "supportsAdditionalLightShadows", "additionalLightsShadowmapResolution",
+                        "supportsSoftShadows", "shadowDistance", "shadowCascadeCount",
+                        "mainLightRenderingMode", "additionalLightsRenderingMode",
+                        "supportsHDR", "useSRPBatcher"
+                    };
+                    var bf = System.Reflection.BindingFlags.Instance |
+                             System.Reflection.BindingFlags.NonPublic |
+                             System.Reflection.BindingFlags.Public;
+                    foreach (var name in interesting)
+                    {
+                        try
+                        {
+                            var prop = pType.GetProperty(name, bf);
+                            if (prop != null) { Debug.Log($"[SceneLoader][Light] Pipeline.{name}={prop.GetValue(pipeline)}"); continue; }
+                            var field = pType.GetField(name, bf);
+                            if (field != null) Debug.Log($"[SceneLoader][Light] Pipeline.{name}={field.GetValue(pipeline)}");
+                        }
+                        catch (Exception e) { Debug.Log($"[SceneLoader][Light] Pipeline.{name} read failed: {e.Message}"); }
+                    }
+                }
+
+                // ===== RenderSettings =====
+                Debug.Log($"[SceneLoader][Light] RenderSettings ambientMode={RenderSettings.ambientMode} " +
+                          $"ambientLight={RenderSettings.ambientLight} ambientIntensity={RenderSettings.ambientIntensity:F2} " +
+                          $"skybox='{(RenderSettings.skybox != null ? RenderSettings.skybox.name : "<null>")}' " +
+                          $"defaultReflectionMode={RenderSettings.defaultReflectionMode} " +
+                          $"reflectionIntensity={RenderSettings.reflectionIntensity:F2} " +
+                          $"sun='{(RenderSettings.sun != null ? RenderSettings.sun.name : "<null>")}'");
+
+                // ===== All Light components in the scene =====
+                var allLights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                int dirCount = 0, enabledActive = 0, shadowCasters = 0;
+                Debug.Log($"[SceneLoader][Light] Total Light components in scene: {allLights.Length}");
+                foreach (var l in allLights)
+                {
+                    if (l == null) continue;
+                    bool inStaged = stagedRoot != null && l.transform.IsChildOf(stagedRoot.transform);
+                    bool active = l.gameObject.activeInHierarchy;
+                    if (l.enabled && active) enabledActive++;
+                    if (l.type == LightType.Directional) dirCount++;
+                    if (l.enabled && active && l.shadows != LightShadows.None) shadowCasters++;
+
+                    // NOTE: Light.lightmapBakeType is editor-only; at runtime we only see bakingOutput.
+                    // bakingOutput.isBaked==false means the scene wasn't baked (the common case for
+                    // dynamically-loaded bundles). If isBaked==true and lightmapBakeType==Baked, that
+                    // means runtime shadows on dynamic meshes are impossible — light only baked.
+                    var bo = l.bakingOutput;
+                    Debug.Log($"[SceneLoader][Light]  - '{l.name}' parent='{l.transform.parent?.name}' inStaged={inStaged} " +
+                              $"type={l.type} enabled={l.enabled} active={active} " +
+                              $"bakeIsBaked={bo.isBaked} bakeType={bo.lightmapBakeType} mixedMode={bo.mixedLightingMode} " +
+                              $"shadows={l.shadows} shadowStrength={l.shadowStrength:F2} " +
+                              $"shadowRes={l.shadowResolution} shadowBias={l.shadowBias:F3} normalBias={l.shadowNormalBias:F3} " +
+                              $"intensity={l.intensity:F2} bounce={l.bounceIntensity:F2} range={l.range:F1} " +
+                              $"renderMode={l.renderMode} cullingMask=0x{l.cullingMask:X8}");
+                }
+                Debug.Log($"[SceneLoader][Light] Summary: directional={dirCount} enabled&active={enabledActive} shadowCasters={shadowCasters}");
+
+                // ===== Player / stick renderers (the things we want shadows ON) =====
+                var allRenderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                var playerLike = allRenderers
+                    .Where(r => r != null && !r.transform.IsChildOf(stagedRoot != null ? stagedRoot.transform : null) &&
+                                (r.name.IndexOf("stick", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("player", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("puck", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("body", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("skater", StringComparison.OrdinalIgnoreCase) >= 0))
+                    .Take(15).ToList();
+                Debug.Log($"[SceneLoader][Light] Player-like renderers sampled: {playerLike.Count}");
+                foreach (var r in playerLike)
+                {
+                    Debug.Log($"[SceneLoader][Light]  P '{r.name}' parent='{r.transform.parent?.name}' " +
+                              $"layer={r.gameObject.layer}({LayerMask.LayerToName(r.gameObject.layer)}) " +
+                              $"shadowCastingMode={r.shadowCastingMode} receiveShadows={r.receiveShadows} " +
+                              $"enabled={r.enabled} active={r.gameObject.activeInHierarchy} " +
+                              $"shader='{(r.sharedMaterial != null && r.sharedMaterial.shader != null ? r.sharedMaterial.shader.name : "<null>")}'");
+                }
+
+                // ===== Ice / rink renderers (the things we want shadows ON) =====
+                var iceLike = allRenderers
+                    .Where(r => r != null &&
+                                (r.name.IndexOf("ice", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("rink", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("floor", StringComparison.OrdinalIgnoreCase) >= 0))
+                    .Take(10).ToList();
+                Debug.Log($"[SceneLoader][Light] Ice/rink-like renderers sampled: {iceLike.Count}");
+                foreach (var r in iceLike)
+                {
+                    Debug.Log($"[SceneLoader][Light]  I '{r.name}' parent='{r.transform.parent?.name}' " +
+                              $"layer={r.gameObject.layer}({LayerMask.LayerToName(r.gameObject.layer)}) " +
+                              $"shadowCastingMode={r.shadowCastingMode} receiveShadows={r.receiveShadows} " +
+                              $"shader='{(r.sharedMaterial != null && r.sharedMaterial.shader != null ? r.sharedMaterial.shader.name : "<null>")}'");
+                }
+
+                // ===== Layers a directional light culls in vs renderer layers in use =====
+                var dirLights = allLights.Where(l => l != null && l.type == LightType.Directional && l.enabled && l.gameObject.activeInHierarchy).ToList();
+                if (dirLights.Count > 0)
+                {
+                    var rendererLayers = new HashSet<int>();
+                    foreach (var r in allRenderers)
+                        if (r != null && r.enabled && r.gameObject.activeInHierarchy)
+                            rendererLayers.Add(r.gameObject.layer);
+                    foreach (var dl in dirLights)
+                    {
+                        var missed = rendererLayers.Where(layer => (dl.cullingMask & (1 << layer)) == 0).ToList();
+                        if (missed.Count > 0)
+                        {
+                            var missedNames = string.Join(", ", missed.Select(l => $"{l}({LayerMask.LayerToName(l)})"));
+                            Debug.LogWarning($"[SceneLoader][Light] Directional light '{dl.name}' does NOT illuminate layers: {missedNames}");
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneLoader][Light] DumpLightingState failed: {e}");
+            }
         }
         static void SetupMusic(GameObject root, AssetInformation info, string bundleFolder)
         {

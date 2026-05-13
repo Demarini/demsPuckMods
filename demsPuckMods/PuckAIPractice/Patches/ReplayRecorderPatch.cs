@@ -58,11 +58,32 @@ namespace PuckAIPractice
 
     // Step 2: Inject bot spawn events into the initial recording snapshot so the
     // replay system knows about them from tick 0 (not mid-recording).
+    //
+    // CRITICAL: StandardGameMode.OnFaceOffStarted calls Server_StartRecording every
+    // FaceOff phase entry, but Server_StopRecording only fires on goal score-end.
+    // So period transitions (Play -> Intermission -> FaceOff -> Play) re-invoke
+    // Server_StartRecording while a recording is already active. The original
+    // short-circuits at `if (this.IsRecording) return;` but Harmony postfixes still
+    // run -- without guarding, this injects another full set of bot spawn events
+    // into the ONGOING recording at the current tick. Each spurious injection adds
+    // one more replay-copy of every fake bot during the next replay -- this is the
+    // "duplicate goalie in replay" bug.
+    //
+    // Fix: capture IsRecording in a prefix BEFORE the original runs, and skip the
+    // postfix injection when the original was going to short-circuit (i.e. it was
+    // already recording).
     [HarmonyPatch(typeof(ReplayRecorder), "Server_StartRecording")]
-    public static class ReplayRecorder_Server_StartRecording_Postfix
+    public static class ReplayRecorder_Server_StartRecording_Patch
     {
-        static void Postfix(ReplayRecorder __instance)
+        static void Prefix(ReplayRecorder __instance, out bool __state)
         {
+            __state = __instance.IsRecording;
+        }
+
+        static void Postfix(ReplayRecorder __instance, bool __state)
+        {
+            if (__state) return; // original short-circuited; do not inject into ongoing recording
+
             if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
                 return;
 
@@ -121,6 +142,113 @@ namespace PuckAIPractice
             var stick = (Stick)message["stick"];
             return stick == null || stick.Player == null
                 || !FakePlayerRegistry.IsFakeClientId(stick.Player.OwnerClientId);
+        }
+    }
+
+    // Step 4: Inject bot spawn events when the bot spawns DURING an active recording.
+    //
+    // Server_StartRecording_Patch (above) only injects events for bots that are in the
+    // registry at the moment a recording starts. But after every goal, DetectPositions
+    // despawns bots on Replay phase entry, and the next recording starts at FaceOff
+    // BEFORE DetectOpenGoalAndSpawnBot has a chance to respawn them (~10 frames later).
+    // Result: the new recording's Server_StartRecording_Patch sees an empty registry,
+    // injects nothing, and the replay has no PlayerSpawned event for the bot --> the
+    // goalie is invisible in every replay after the first one of each game.
+    //
+    // The Block* prefixes above stop the controller from auto-capturing fake-bot spawn
+    // events into the recording (which would have caused duplicates before today's
+    // Server_StartRecording guard). Postfixes still run even when their matching prefix
+    // returned false, so these postfixes are the natural place to inject the spawn event
+    // ourselves -- gated on "recording is active" so we only fire mid-recording.
+    [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnPlayerSpawned")]
+    static class InjectFakeBotPlayerSpawned
+    {
+        static void Postfix(ReplayRecorderController __instance, Dictionary<string, object> message)
+        {
+            try
+            {
+                var player = (Player)message["player"];
+                if (player == null) return;
+                if (!FakePlayerRegistry.IsFakeClientId(player.OwnerClientId)) return;
+                var rec = __instance.GetComponent<ReplayRecorder>();
+                if (rec != null && rec.IsRecording)
+                    rec.Server_AddPlayerSpawnedEvent(player);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ReplayPatch] InjectFakeBotPlayerSpawned error: {e}");
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnPlayerBodySpawned")]
+    static class InjectFakeBotPlayerBodySpawned
+    {
+        static void Postfix(ReplayRecorderController __instance, Dictionary<string, object> message)
+        {
+            try
+            {
+                var pb = (PlayerBody)message["playerBody"];
+                if (pb == null || pb.Player == null) return;
+                if (!FakePlayerRegistry.IsFakeClientId(pb.Player.OwnerClientId)) return;
+                var rec = __instance.GetComponent<ReplayRecorder>();
+                if (rec != null && rec.IsRecording)
+                    rec.Server_AddPlayerBodySpawnedEvent(pb);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ReplayPatch] InjectFakeBotPlayerBodySpawned error: {e}");
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(ReplayRecorderController), "Event_Everyone_OnStickSpawned")]
+    static class InjectFakeBotStickSpawned
+    {
+        static void Postfix(ReplayRecorderController __instance, Dictionary<string, object> message)
+        {
+            try
+            {
+                var stick = (Stick)message["stick"];
+                if (stick == null || stick.Player == null) return;
+                if (!FakePlayerRegistry.IsFakeClientId(stick.Player.OwnerClientId)) return;
+                var rec = __instance.GetComponent<ReplayRecorder>();
+                if (rec != null && rec.IsRecording)
+                    rec.Server_AddStickSpawnedEvent(stick);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ReplayPatch] InjectFakeBotStickSpawned error: {e}");
+            }
+        }
+    }
+
+    // Diagnostic logging — kept live while we investigate the rare "duplicate goalie
+    // in replay" symptom. Each call to Server_AddPlayerSpawnedEvent /
+    // Server_AddPlayerBodySpawnedEvent gets logged with its caller, so a recording
+    // that ends up with 2 spawn events for a fake clientId will show up clearly
+    // in journalctl. Remove once the bug is confirmed gone in production.
+    [HarmonyPatch(typeof(ReplayRecorder), nameof(ReplayRecorder.Server_AddPlayerSpawnedEvent))]
+    static class DiagLogPlayerSpawnedEvent
+    {
+        static void Prefix(ReplayRecorder __instance, Player player)
+        {
+            if (player == null) return;
+            bool fake = FakePlayerRegistry.IsFakeClientId(player.OwnerClientId);
+            string tag = fake ? "FAKE" : "real";
+            Debug.Log($"[DIAG] AddPlayerSpawnedEvent clientId={player.OwnerClientId} ({tag}) tick={__instance.Tick} recording={__instance.IsRecording} caller={new System.Diagnostics.StackTrace(1, false).GetFrame(1)?.GetMethod()?.DeclaringType?.Name}.{new System.Diagnostics.StackTrace(1, false).GetFrame(1)?.GetMethod()?.Name}");
+        }
+    }
+
+    [HarmonyPatch(typeof(ReplayRecorder), nameof(ReplayRecorder.Server_AddPlayerBodySpawnedEvent))]
+    static class DiagLogPlayerBodySpawnedEvent
+    {
+        static void Prefix(ReplayRecorder __instance, PlayerBody playerBody)
+        {
+            if (playerBody == null || playerBody.Player == null) return;
+            bool fake = FakePlayerRegistry.IsFakeClientId(playerBody.Player.OwnerClientId);
+            string tag = fake ? "FAKE" : "real";
+            Debug.Log($"[DIAG] AddPlayerBodySpawnedEvent clientId={playerBody.Player.OwnerClientId} ({tag}) tick={__instance.Tick} recording={__instance.IsRecording} caller={new System.Diagnostics.StackTrace(1, false).GetFrame(1)?.GetMethod()?.DeclaringType?.Name}.{new System.Diagnostics.StackTrace(1, false).GetFrame(1)?.GetMethod()?.Name}");
         }
     }
 }

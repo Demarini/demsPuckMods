@@ -64,8 +64,6 @@ namespace RotateMinimap
     [HarmonyPatch(typeof(UIMinimap), "Update")]
     public static class RotateMinimapPatch
     {
-        static float _nextLogTime;
-
         [HarmonyPostfix]
         public static void Postfix(UIMinimap __instance)
         {
@@ -130,12 +128,6 @@ namespace RotateMinimap
                 }
             }
 
-            if (Time.time >= _nextLogTime)
-            {
-                _nextLogTime = Time.time + 2f;
-                Debug.Log($"[RotateMinimap] Team={__instance.Team} MapRot={mapRotation:F1} EulerY={localRotation:F1}");
-                Debug.Log($"[RotateMinimap] WorldPos={localWorldPos} MinimapPos={localMinimapPos}");
-            }
         }
 
         private static Vector2 WorldPositionToMinimapPosition(Vector3 position, Bounds bounds, UIMinimap __instance)

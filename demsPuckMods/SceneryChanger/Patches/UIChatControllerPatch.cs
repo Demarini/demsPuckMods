@@ -19,6 +19,19 @@ namespace SceneryChanger.Patches
     {
         public static SceneInformation sceneInformation = null;
 
+        // Cached !LoadMap payload, keyed on the SceneInformation reference. ConfigData.Load()
+        // builds a new ConfigData (and therefore a new sceneInformation reference) each time,
+        // so reference inequality is a reliable invalidation signal across scenery reloads.
+        static SceneInformation _cachedSi;
+        static string _cachedPayload;
+
+        // Cached reflection for SendChatToClient — these were looked up per-call, hit on every
+        // client join via SyncComplete_Postfix.
+        static Type _chatManagerType;
+        static MethodInfo _chatManagerInstanceGetter;
+        static MethodInfo _sendChatMethod;
+        static object _chatManagerInstance;
+
         static MethodBase TargetMethod()
         {
             // Use reflection to find the game's SceneManager (global namespace),
@@ -37,12 +50,19 @@ namespace SceneryChanger.Patches
 
             try
             {
-                ConfigData.Load();
+                // ConfigData.Instance lazy-loads once; do NOT call Load() here — it does
+                // synchronous disk I/O + JSON parse on the main thread per join, and the
+                // server-side scenery only changes on scene reload (which calls Load itself).
                 var si = ConfigData.Instance.sceneInformation;
                 if (si == null) return;
 
-                string payload = "!LoadMap " + MessageObfuscation.Encode(JsonConvert.SerializeObject(si));
-                SendChatToClient(payload, clientId);
+                if (!ReferenceEquals(si, _cachedSi))
+                {
+                    _cachedSi = si;
+                    _cachedPayload = "!LoadMap " + MessageObfuscation.Encode(JsonConvert.SerializeObject(si));
+                }
+
+                SendChatToClient(_cachedPayload, clientId);
                 SendChatToClient("Type /sl help for scenery loader commands.", clientId);
             }
             catch (Exception e)
@@ -53,12 +73,19 @@ namespace SceneryChanger.Patches
 
         internal static void SendChatToClient(string message, ulong clientId)
         {
-            var chatManagerType = AccessTools.TypeByName("ChatManager");
-            if (chatManagerType == null) { Debug.LogWarning("[SceneryChanger] ChatManager not found"); return; }
-            var instance = AccessTools.PropertyGetter(chatManagerType.BaseType, "Instance")?.Invoke(null, null);
-            if (instance == null) { Debug.LogWarning("[SceneryChanger] ChatManager.Instance is null"); return; }
-            AccessTools.Method(chatManagerType, "Server_SendChatMessageToClients", new Type[] { typeof(string), typeof(ulong[]) })
-                ?.Invoke(instance, new object[] { message, new ulong[] { clientId } });
+            if (_chatManagerType == null)
+            {
+                _chatManagerType = AccessTools.TypeByName("ChatManager");
+                if (_chatManagerType == null) { Debug.LogWarning("[SceneryChanger] ChatManager not found"); return; }
+                _chatManagerInstanceGetter = AccessTools.PropertyGetter(_chatManagerType.BaseType, "Instance");
+                _sendChatMethod = AccessTools.Method(_chatManagerType, "Server_SendChatMessageToClients", new Type[] { typeof(string), typeof(ulong[]) });
+            }
+
+            if (_chatManagerInstance == null)
+                _chatManagerInstance = _chatManagerInstanceGetter?.Invoke(null, null);
+            if (_chatManagerInstance == null) { Debug.LogWarning("[SceneryChanger] ChatManager.Instance is null"); return; }
+
+            _sendChatMethod?.Invoke(_chatManagerInstance, new object[] { message, new ulong[] { clientId } });
         }
 
         [HarmonyPatch]
