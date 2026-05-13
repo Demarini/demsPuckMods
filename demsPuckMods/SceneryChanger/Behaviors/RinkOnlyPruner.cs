@@ -227,11 +227,18 @@ namespace SceneryLoader.Behaviors
             RenderSettings.skybox = null;
             foreach (var light in GameObject.FindObjectsOfType<Light>(true))
             {
-                if (light.enabled)
+                if (!light.enabled) continue;
+                // Preserve directionals: URP's supportsAdditionalLightShadows=false means the
+                // main directional is the only thing that can cast shadows, and the game's
+                // original directional already has the right culling/bias to put a shadow on
+                // the stick. Intensity gets dimmed later by ConfigureMainSun if the scene asks.
+                if (light.type == LightType.Directional)
                 {
-                    Debug.Log($"[LightKiller] Disabling game light ‘{light.name}’ on ‘{light.transform.parent?.name}’ (type={light.type}, intensity={light.intensity})");
-                    light.enabled = false;
+                    Debug.Log($"[LightKiller] Preserving directional '{light.name}' on '{light.transform.parent?.name}' (intensity={light.intensity})");
+                    continue;
                 }
+                Debug.Log($"[LightKiller] Disabling game light ‘{light.name}’ on ‘{light.transform.parent?.name}’ (type={light.type}, intensity={light.intensity})");
+                light.enabled = false;
             }
         }
         //public static void LoadScene(SM.Scene scene, string assetBundle, string prefab, string skyBox, string contentKey64)

@@ -5,13 +5,13 @@ Replace the default Puck arena with fully custom scenes built from Unity asset b
 [h2]Features[/h2]
 
 [h3]Custom Arenas[/h3]
-Load any Unity asset bundle as a replacement for the default hangar. The mod strips the original arena geometry, lighting, and reflections, then instantiates your custom prefab in its place. Spectator positions defined in your prefab are automatically detected and populated.
+Load any Unity asset bundle as a replacement for the default hangar. The mod strips the original arena geometry, point/spot lights, and reflections, then instantiates your custom prefab. Spectator positions defined in your prefab are automatically detected and populated.
 
 [h3]Glass Control[/h3]
-Toggle rink glass on or off per scene. Some environments look better without the glass barriers.
+Toggle rink glass on or off per scene.
 
-[h3]Custom Lighting[/h3]
-Override the game's ambient light with a configurable multiplier. Darken the arena for an indoor atmosphere or brighten it for an outdoor feel. Scene prefabs can include their own directional, point, and spot lights.
+[h3]Custom Lighting & Shadows[/h3]
+Per-bundle ambient multiplier, your own directional/point/spot lights, and a preserved game directional so the stick still casts a real shadow on the ice. Dim or replace it per scene for moody arenas without losing the shadow.
 
 [h3]Custom Skyboxes[/h3]
 Each bundle can include a skybox material that replaces the default sky, visible through any camera in the scene.
@@ -38,11 +38,10 @@ Bundles can be encrypted to [b].abx[/b] format for distribution. Provide the Bas
 [h2]Server Setup[/h2]
 
 [olist]
-[*] Install the mod into your server's [b]Plugins/SceneryLoader/[/b] folder.
-[*] On first launch, a [b]SceneryLoaderConfig.local.json[/b] file is created in [b]<PuckInstall>/Config/SceneryLoader/[/b].
-[*] Edit the config file to point at your desired bundle (see Server Config below).
-[*] Place your asset bundle files in the [b]Plugins/SceneryLoader/AssetBundles/[/b] folder along with their [b]AssetInformation.json[/b] and any audio files.
-[*] When a player connects, the server syncs the scene configuration to them automatically.
+[*] Install the mod into [b]Plugins/SceneryLoader/[/b].
+[*] On first launch, [b]SceneryLoaderConfig.local.json[/b] is created in [b]<PuckInstall>/Config/SceneryLoader/[/b]. Edit it to point at your bundle.
+[*] Drop your bundle + [b]AssetInformation.json[/b] + audio files into [b]Plugins/SceneryLoader/AssetBundles/[/b].
+[*] Scene config syncs to players on connect automatically.
 [/olist]
 
 [h2]File Layout[/h2]
@@ -80,11 +79,11 @@ The [b]SceneryLoaderConfig.local.json[/b] file controls which scene the server l
 
 [table]
 [tr][th]Property[/th][th]Description[/th][/tr]
-[tr][td]bundleName[/td][td]Filename of the asset bundle in the AssetBundles folder (without extension).[/td][/tr]
-[tr][td]prefabName[/td][td]Name of the root prefab inside the bundle to instantiate.[/td][/tr]
-[tr][td]skyboxName[/td][td]Name of the skybox material inside the bundle. Leave empty for no skybox change.[/td][/tr]
-[tr][td]useSceneLocally[/td][td]If true, loads the scene in practice/local mode as well. If false, only loads in multiplayer.[/td][/tr]
-[tr][td]contentKey64[/td][td]Base64 decryption key for .abx encrypted bundles. Leave empty for unencrypted bundles.[/td][/tr]
+[tr][td]bundleName[/td][td]Filename of the bundle (no extension).[/td][/tr]
+[tr][td]prefabName[/td][td]Root prefab to instantiate.[/td][/tr]
+[tr][td]skyboxName[/td][td]Skybox material in the bundle. Empty = no change.[/td][/tr]
+[tr][td]useSceneLocally[/td][td]Also load in practice/local mode.[/td][/tr]
+[tr][td]contentKey64[/td][td]Base64 decryption key for .abx bundles. Empty = unencrypted.[/td][/tr]
 [/table]
 
 [h2]AssetInformation.json Reference[/h2]
@@ -96,6 +95,10 @@ This file lives in the [b]AssetBundles[/b] folder alongside the bundle and contr
   "useGlass": false,
   "useCustomAmbient": true,
   "ambientMultiplier": 0.35,
+  "useGameDirectional": true,
+  "gameDirectionalIntensity": -1,
+  "gameDirectionalShadowStrength": -1,
+  "propsCastShadows": false,
   "musicEnabled": true,
   "musicPath": "music.mp3",
   "musicVolume": 0.5,
@@ -111,14 +114,21 @@ This file lives in the [b]AssetBundles[/b] folder alongside the bundle and contr
 [tr][td]useGlass[/td][td]bool[/td][td]true[/td][td]Show or hide the rink glass barriers.[/td][/tr]
 [tr][td]useCustomAmbient[/td][td]bool[/td][td]false[/td][td]Enable custom ambient light override.[/td][/tr]
 [tr][td]ambientMultiplier[/td][td]float[/td][td]1.0[/td][td]Ambient light intensity multiplier. Values below 1 darken, above 1 brighten.[/td][/tr]
+[tr][td]useGameDirectional[/td][td]bool[/td][td]true[/td][td]Keep the game's default directional alive as the main shadow caster. Set false only if your bundle ships its own Directional Light named "MainSun".[/td][/tr]
+[tr][td]gameDirectionalIntensity[/td][td]float[/td][td]-1[/td][td]Override game directional intensity. -1 = leave default (~0.5). For moody scenes try 0.05–0.15 — dim light, shadow still casts.[/td][/tr]
+[tr][td]gameDirectionalShadowStrength[/td][td]float[/td][td]-1[/td][td]Override shadow strength. -1 = default. 0 = no shadow, 1 = fully dark.[/td][/tr]
+[tr][td]propsCastShadows[/td][td]bool[/td][td]false[/td][td]Whether bundle props cast shadows. Off is a big perf win — ice still receives the stick shadow. Flip on only if a specific prop must cast.[/td][/tr]
 [tr][td]musicEnabled[/td][td]bool[/td][td]false[/td][td]Enable looping background music.[/td][/tr]
-[tr][td]musicPath[/td][td]string[/td][td]""[/td][td]Filename of the MP3 file in the AssetBundles folder.[/td][/tr]
-[tr][td]musicVolume[/td][td]float[/td][td]0.5[/td][td]Music volume (0.0 to 1.0). Players can override this with /slMusicVolume.[/td][/tr]
-[tr][td]ambientAudioEnabled[/td][td]bool[/td][td]false[/td][td]Enable a separate looping ambient audio track.[/td][/tr]
-[tr][td]ambientAudioPath[/td][td]string[/td][td]""[/td][td]Filename of the ambient MP3 file in the AssetBundles folder.[/td][/tr]
-[tr][td]ambientAudioVolume[/td][td]float[/td][td]0.3[/td][td]Ambient audio volume (0.0 to 1.0). Players can override this with /slAmbientVolume.[/td][/tr]
-[tr][td]goalCrowdNoiseVolume[/td][td]float[/td][td]0.37[/td][td]Goal celebration crowd noise volume (0.0 to 1.0). Players can override this with /slGoalCrowdNoise.[/td][/tr]
+[tr][td]musicPath[/td][td]string[/td][td]""[/td][td]MP3 filename in the AssetBundles folder.[/td][/tr]
+[tr][td]musicVolume[/td][td]float[/td][td]0.5[/td][td]0.0–1.0. Players can override via /slMusicVolume.[/td][/tr]
+[tr][td]ambientAudioEnabled[/td][td]bool[/td][td]false[/td][td]Enable a separate ambient audio track.[/td][/tr]
+[tr][td]ambientAudioPath[/td][td]string[/td][td]""[/td][td]MP3 filename for the ambient track.[/td][/tr]
+[tr][td]ambientAudioVolume[/td][td]float[/td][td]0.3[/td][td]0.0–1.0. Players can override via /slAmbientVolume.[/td][/tr]
+[tr][td]goalCrowdNoiseVolume[/td][td]float[/td][td]0.37[/td][td]0.0–1.0. Players can override via /slGoalCrowdNoise.[/td][/tr]
 [/table]
+
+[h3]Updating Older Bundles[/h3]
+Older bundles still load — new fields fall to safe defaults. The one visible change: the game's directional is preserved by default, so old scenes will gain a stick-on-ice shadow. If that washes out a moody scene, add [b]"gameDirectionalIntensity": 0.08[/b] to your JSON, or set [b]"useGameDirectional": false[/b] to opt out entirely.
 
 [h2]For Scene Creators[/h2]
 
@@ -133,9 +143,9 @@ Scenes are built using the Unity Editor tooling included in the companion projec
 Your prefab can include:
 [list]
 [*] Arena geometry and props
-[*] Directional, point, and spot lights
+[*] Directional, point, and spot lights (including animated/strobe lights — they won't affect the main shadow caster)
 [*] A skybox material
 [*] GameObjects named as spectator positions (automatically detected)
 [/list]
 
-All settings in AssetInformation.json are backwards compatible — older bundles that only specify [b]useGlass[/b] will continue to work with sensible defaults for all other properties.
+[b]Note on shadows:[/b] URP only allows one main directional to cast shadows. The mod uses the game's preserved directional for that role by default. To use your own, set [b]useGameDirectional = false[/b] and add a Directional Light named [b]MainSun[/b] to your prefab (active, Mode = Realtime, Shadow Type = Soft). Decorative/animated directionals are left untouched and never become the main light.

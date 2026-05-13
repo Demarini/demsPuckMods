@@ -96,6 +96,8 @@ namespace SceneryChanger.Services
             stagedRoot.transform.SetParent(container.transform, true);
 
             RebindShadersToGameRuntime(stagedRoot);
+            ConfigureMainSun(stagedRoot, info);
+            ApplyBundleShadowCasting(stagedRoot, info);
             SetupMusic(stagedRoot, info, resolved?.FolderPath);
             SetupAmbientAudio(stagedRoot, info, resolved?.FolderPath);
             if (info != null)
@@ -136,6 +138,134 @@ namespace SceneryChanger.Services
 
             // Optional cleanup of stray legacy objects AFTER swap
             //ClearLegacyOutsideContainer(); // see helper below (non-blocking)
+        }
+
+        // Selects the URP main directional light that will produce the scene's shadow pass.
+        // Priority: the game's preserved original directional (kept alive by RinkOnlyPruner's
+        // RemoveHangar) — it already has correct culling and bias for the stick. If that's
+        // gone, falls back to a Directional Light named "MainSun" inside the bundle.
+        // The game's URP asset has supportsAdditionalLightShadows=false, so only this main
+        // directional can cast shadows — strobe/decorative directionals in the bundle stay
+        // off the shadow path regardless of their settings.
+        static void ConfigureMainSun(GameObject stagedRoot, AssetInformation info)
+        {
+            try
+            {
+                bool useGameDir = info == null || info.useGameDirectional;
+                Light gameDirectional = FindGameDirectional(stagedRoot);
+
+                if (useGameDir && gameDirectional != null)
+                {
+                    gameDirectional.enabled = true;
+                    if (gameDirectional.shadows == LightShadows.None) gameDirectional.shadows = LightShadows.Soft;
+
+                    if (info != null && info.gameDirectionalShadowStrength >= 0f)
+                        gameDirectional.shadowStrength = info.gameDirectionalShadowStrength;
+                    else if (gameDirectional.shadowStrength < 0.01f)
+                        gameDirectional.shadowStrength = 1f;
+
+                    float originalIntensity = gameDirectional.intensity;
+                    if (info != null && info.gameDirectionalIntensity >= 0f)
+                        gameDirectional.intensity = info.gameDirectionalIntensity;
+
+                    RenderSettings.sun = gameDirectional;
+                    Debug.Log($"[SceneLoader] MainSun: using game directional '{gameDirectional.name}' parent='{gameDirectional.transform.parent?.name}' " +
+                              $"intensity={gameDirectional.intensity:F2} (was {originalIntensity:F2}) " +
+                              $"shadows={gameDirectional.shadows} strength={gameDirectional.shadowStrength:F2}");
+                    return;
+                }
+
+                // Asked not to use the game directional — disable it so URP can't auto-pick it as main.
+                if (!useGameDir && gameDirectional != null)
+                {
+                    gameDirectional.enabled = false;
+                    Debug.Log($"[SceneLoader] MainSun: useGameDirectional=false, disabled game directional '{gameDirectional.name}'");
+                }
+
+                Light bundleMain = FindBundleMainSun(stagedRoot);
+                if (bundleMain == null)
+                {
+                    Debug.LogWarning(useGameDir
+                        ? "[SceneLoader] No game directional preserved and no bundle 'MainSun' found. Scene will have no main-light shadows."
+                        : "[SceneLoader] useGameDirectional=false but bundle has no 'MainSun' directional. Scene will have no main-light shadows.");
+                    RenderSettings.sun = null;
+                    return;
+                }
+
+                bundleMain.enabled = true;
+                if (bundleMain.shadows == LightShadows.None) bundleMain.shadows = LightShadows.Soft;
+                if (bundleMain.shadowStrength < 0.01f) bundleMain.shadowStrength = 1f;
+                RenderSettings.sun = bundleMain;
+
+                if (!bundleMain.gameObject.activeInHierarchy)
+                    Debug.LogWarning($"[SceneLoader] Bundle MainSun '{bundleMain.name}' is NOT active in hierarchy — " +
+                                     "shadows will not render until it's active.");
+
+                Debug.Log($"[SceneLoader] MainSun: using bundle 'MainSun' '{bundleMain.name}' parent='{bundleMain.transform.parent?.name}' " +
+                          $"activeInHierarchy={bundleMain.gameObject.activeInHierarchy} intensity={bundleMain.intensity:F2} " +
+                          $"shadows={bundleMain.shadows} strength={bundleMain.shadowStrength:F2}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneLoader] ConfigureMainSun failed: {e.Message}");
+            }
+        }
+
+        // Find the game's original directional light — an active directional that's NOT inside
+        // the staged bundle root. Strobes/decorative directionals authored in bundles are skipped.
+        static Light FindGameDirectional(GameObject stagedRoot)
+        {
+            var all = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Light fallback = null;
+            foreach (var l in all)
+            {
+                if (l == null || l.type != LightType.Directional) continue;
+                if (stagedRoot != null && l.transform.IsChildOf(stagedRoot.transform)) continue;
+                if (!l.gameObject.activeInHierarchy) { fallback = fallback ?? l; continue; }
+                return l;
+            }
+            return fallback;
+        }
+
+        // Flip bundle renderers' shadowCastingMode based on propsCastShadows. Default-off avoids
+        // rendering hundreds of decorative meshes into the shadow map every frame (×cascades).
+        // Only the game's player/stick (outside the staged root) needs to be a caster for the
+        // ice shadow we actually care about.
+        static void ApplyBundleShadowCasting(GameObject stagedRoot, AssetInformation info)
+        {
+            if (stagedRoot == null) return;
+            try
+            {
+                bool castShadows = info != null && info.propsCastShadows;
+                var target = castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                int changed = 0, total = 0;
+                foreach (var r in stagedRoot.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    total++;
+                    if (r.shadowCastingMode != target)
+                    {
+                        r.shadowCastingMode = target;
+                        changed++;
+                    }
+                }
+                Debug.Log($"[SceneLoader] Bundle shadow casting: propsCastShadows={castShadows} -> set {target} on {changed}/{total} renderers");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneLoader] ApplyBundleShadowCasting failed: {e.Message}");
+            }
+        }
+
+        static Light FindBundleMainSun(GameObject stagedRoot)
+        {
+            if (stagedRoot == null) return null;
+            foreach (var l in stagedRoot.GetComponentsInChildren<Light>(true))
+            {
+                if (l == null || l.type != LightType.Directional) continue;
+                if (l.name.Equals("MainSun", StringComparison.OrdinalIgnoreCase)) return l;
+            }
+            return null;
         }
 
         static IEnumerator DumpLightingStateDelayed(GameObject stagedRoot, float delaySec)
