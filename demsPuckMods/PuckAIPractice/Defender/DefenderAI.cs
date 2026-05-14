@@ -78,6 +78,20 @@ namespace PuckAIPractice.Defender
         // Forward input never drops below this (so the bot still glides toward target).
         public float ThrottleMinForward = 0.25f;
 
+        [Header("Stick Aim")]
+        // Aim past the puck along the bot→puck axis. Without this, the raycast hits the
+        // top of the puck and the blade target lands at puck-top height (hovering).
+        // Shifting the aim point past the puck makes the ray clear over the puck and
+        // land on the ice past it, putting the blade at ice level next to the puck's
+        // side instead of on top of it.
+        public float StickAimForwardExtension = 0.3f;
+        // Hard cap on the aim distance from the bot. Beyond this the raycast can't
+        // reach the ice within max stick reach (~2.5m) and the blade target ends up
+        // hovering in midair. Clamping the aim within reach keeps the blade on the ice
+        // at all times — when the puck is far, the aim point is "stick-reach forward
+        // toward the puck on the ice," not at the puck itself.
+        public float StickMaxAimDistance = 1.8f;
+
         private enum EngagementMode { Pursuit, Mirror, Predict }
 
         // Slide state
@@ -183,6 +197,58 @@ namespace PuckAIPractice.Defender
 
             UpdateSlide(input, absAngle, cutDetected);
             UpdateSprint(input, body, fwd, dist);
+            AimStickAtPuck(input, targetPos);
+        }
+
+        // Aim the stick blade at the live puck by inverting the game's raycast.
+        // The game does: raycastOrigin.localRotation = Quaternion.Euler(angle.x, angle.y, 0),
+        // then shoots a ray along raycastOrigin.forward, and places the blade at the hit.
+        // For a desired direction d (in StickPositioner-local space), the forward vector
+        // from Euler(pitch, yaw, 0) is (sin(yaw)cos(pitch), -sin(pitch), cos(yaw)cos(pitch)).
+        // Inverse: pitch = asin(-d.y), yaw = atan2(d.x, d.z). The game clamps to the
+        // player's angle range and PIDs toward it — that smoothing is what makes the
+        // bot look human instead of telekinetic.
+        private void AimStickAtPuck(PlayerInput input, Vector3 targetPos)
+        {
+            var positioner = ControlledPlayer.StickPositioner;
+            if (positioner == null) return;
+
+            var puck = PickFocusPuck(targetPos);
+            if (puck == null) return;
+
+            Vector3 originPos = positioner.RaycastOriginPosition;
+            Vector3 puckPos = puck.transform.position;
+            Vector3 botPos = ControlledPlayer.PlayerBody.transform.position;
+
+            // Aim along the bot→puck horizontal axis, on the ice. Cap the forward
+            // distance at StickMaxAimDistance so the raycast always lands on the ice
+            // within max stick reach — otherwise the ray runs out in midair and the
+            // blade hovers. When in close range, extend past the puck so the blade
+            // contacts its side, not its top.
+            Vector3 horizToPuck = puckPos - botPos;
+            horizToPuck.y = 0f;
+            float horizDist = horizToPuck.magnitude;
+            Vector3 horizDir = horizDist > 0.0001f
+                ? horizToPuck / horizDist
+                : ControlledPlayer.PlayerBody.transform.forward;
+            horizDir.y = 0f;
+            if (horizDir.sqrMagnitude < 0.0001f) return;
+            horizDir.Normalize();
+
+            float aimDist = Mathf.Min(horizDist + StickAimForwardExtension, StickMaxAimDistance);
+            Vector3 aimPoint = botPos + horizDir * aimDist;
+            // Puck rests on the ice, so its Y is a stable proxy for ice surface height.
+            aimPoint.y = puckPos.y;
+
+            Vector3 toAim = aimPoint - originPos;
+            if (toAim.sqrMagnitude < 0.0001f) return;
+
+            Vector3 dirLocal = positioner.transform.InverseTransformDirection(toAim.normalized);
+            float clampedY = Mathf.Clamp(dirLocal.y, -1f, 1f);
+            float pitch = Mathf.Asin(-clampedY) * Mathf.Rad2Deg;
+            float yaw = Mathf.Atan2(dirLocal.x, dirLocal.z) * Mathf.Rad2Deg;
+
+            input.StickRaycastOriginAngleInput.ServerValue = new Vector2(pitch, yaw);
         }
 
         private void UpdateSprint(PlayerInput input, PlayerBody body, float fwd, float dist)
@@ -329,6 +395,30 @@ namespace PuckAIPractice.Defender
                 input.SlideInput.ServerValue = true;
                 predictCommitPending = false;
             }
+        }
+
+        // Pick the puck the target player is most likely handling — i.e. closest to them.
+        // Approximates "puck the player is engaged with" without needing a touch event hook.
+        private Puck PickFocusPuck(Vector3 targetPos)
+        {
+            if (PuckManager.Instance == null) return null;
+            var pucks = PuckManager.Instance.GetPucks(false);
+            if (pucks == null || pucks.Count == 0) return null;
+
+            Puck best = null;
+            float bestSqr = float.MaxValue;
+            for (int i = 0; i < pucks.Count; i++)
+            {
+                var p = pucks[i];
+                if (p == null) continue;
+                float sqr = (p.transform.position - targetPos).sqrMagnitude;
+                if (sqr < bestSqr)
+                {
+                    bestSqr = sqr;
+                    best = p;
+                }
+            }
+            return best;
         }
     }
 }
