@@ -29,6 +29,20 @@ namespace SceneryChanger.Model
         // only if a specific prop needs to throw a real cast shadow.
         public bool propsCastShadows = false;
 
+        // When false (default), the game's hangar reflection probe is disabled — its baked
+        // cubemap captures the original ceiling lights/rafters, which look out of place in
+        // most custom scenes (the ice would reflect a hangar that no longer exists). Bundle-
+        // authored probes inside the staged root stay alive either way. Set true to keep the
+        // game's probe alive (e.g. for arena-replacement bundles that want the vanilla glossy
+        // ice look without baking their own probe).
+        public bool keepReflections = false;
+
+        // When false (default), the game's non-directional point/spot lights (the ones that lit
+        // the original hangar) are disabled to keep moody bundles from washing out. When true,
+        // they stay alive — bringing back the small bright specular dots on the ice that the
+        // vanilla arena has. The game's directional is always handled by useGameDirectional.
+        public bool keepGameLights = false;
+
         public bool musicEnabled = false;
         public string musicPath = "";
         public float musicVolume = 0.5f;

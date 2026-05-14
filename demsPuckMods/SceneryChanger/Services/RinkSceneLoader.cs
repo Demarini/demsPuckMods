@@ -98,6 +98,8 @@ namespace SceneryChanger.Services
             RebindShadersToGameRuntime(stagedRoot);
             ConfigureMainSun(stagedRoot, info);
             ApplyBundleShadowCasting(stagedRoot, info);
+            ReflectionKiller.ApplyReflectionPolicy(stagedRoot, info != null && info.keepReflections);
+            ApplyGameLightPolicy(stagedRoot, info);
             SetupMusic(stagedRoot, info, resolved?.FolderPath);
             SetupAmbientAudio(stagedRoot, info, resolved?.FolderPath);
             if (info != null)
@@ -225,6 +227,40 @@ namespace SceneryChanger.Services
                 return l;
             }
             return fallback;
+        }
+
+        // Decide what to do with the game's non-directional point/spot lights (the directional is
+        // handled separately by ConfigureMainSun). Default behavior disables them — this kills the
+        // hangar's ambient lit look but is desirable for moody bundles. When keepGameLights=true,
+        // they stay alive so the URP/Lit shader's specular pass gives the ice the small bright
+        // dots you see in the vanilla arena.
+        static void ApplyGameLightPolicy(GameObject stagedRoot, AssetInformation info)
+        {
+            try
+            {
+                bool keep = info != null && info.keepGameLights;
+                int kept = 0, disabled = 0;
+                foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (l == null) continue;
+                    if (l.type == LightType.Directional) continue;
+                    if (stagedRoot != null && l.transform.IsChildOf(stagedRoot.transform)) continue;
+                    if (keep)
+                    {
+                        l.enabled = true;
+                        kept++;
+                    }
+                    else
+                    {
+                        if (l.enabled) { l.enabled = false; disabled++; }
+                    }
+                }
+                Debug.Log($"[GameLightPolicy] keepGameLights={keep} kept={kept} disabled={disabled} (game point/spot lights outside staged root)");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[GameLightPolicy] failed: {e.Message}");
+            }
         }
 
         // Flip bundle renderers' shadowCastingMode based on propsCastShadows. Default-off avoids

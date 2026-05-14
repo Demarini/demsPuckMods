@@ -68,5 +68,49 @@ namespace SceneryLoader.Services
             DynamicGI.UpdateEnvironment();
             Debug.Log("[ReflectionKiller] Restored probes and skybox reflections.");
         }
+
+        // Smart cleanup called AFTER the bundle is instantiated. Disables the game's now-stale
+        // hangar reflection probes (they were sampling geometry we just destroyed) while keeping
+        // any reflection probes the bundle authored alive. Also restores the global default
+        // reflection so glossy surfaces (ice especially) reflect their environment instead of
+        // a black cubemap. SkyboxLoader runs after this and may override defaultReflectionMode
+        // again if the bundle ships a custom skybox.
+        public static void ApplyReflectionPolicy(GameObject stagedRoot, bool keepAllReflections)
+        {
+            try
+            {
+                int disabled = 0, kept = 0;
+                foreach (var rp in UnityEngine.Object.FindObjectsByType<ReflectionProbe>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (rp == null) continue;
+                    bool inStaged = stagedRoot != null && rp.transform.IsChildOf(stagedRoot.transform);
+                    if (keepAllReflections || inStaged)
+                    {
+                        rp.enabled = true;
+                        kept++;
+                    }
+                    else
+                    {
+                        rp.enabled = false;
+                        disabled++;
+                    }
+                }
+
+                // Undo any black-cube override we may have left around from older flows so URP can
+                // sample a real environment (skybox or fallback) for glossy surfaces.
+                if (RenderSettings.defaultReflectionMode == DefaultReflectionMode.Custom)
+                {
+                    RenderSettings.defaultReflectionMode = DefaultReflectionMode.Skybox;
+                    RenderSettings.customReflection = null;
+                }
+
+                DynamicGI.UpdateEnvironment();
+                Debug.Log($"[ReflectionKiller] Policy: keepAll={keepAllReflections} disabled={disabled} kept={kept} (bundle/+game) defaultRefl={RenderSettings.defaultReflectionMode}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ReflectionKiller] ApplyReflectionPolicy failed: {e.Message}");
+            }
+        }
     }
 }
