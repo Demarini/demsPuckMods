@@ -64,26 +64,35 @@ namespace PuckAIPractice.Defender
             ai.ControlledPlayer = player;
             ai.TargetClientId = targetClientId;
 
-            // Per-position defaults for home offset. Defensemen sit deeper (closer to
-            // own net, near the slot); forwards sit at the blue line; C is centered.
-            // Wings tuck the same as defensemen so adjacent positions' zones overlap
-            // with a clean margin. Tunable in the Inspector if needed.
+            // Per-position defaults for home offset and zone radius. Defensemen sit
+            // deeper (closer to own net, near the slot); forwards sit at the blue line;
+            // C is centered. Wings tuck the same as defensemen so adjacent positions'
+            // zones overlap with a clean margin.
+            //
+            // ZoneRadius is also per-position: LD/RD get a wider zone (20m) so they
+            // engage simultaneously with the forward line when an attacker enters the
+            // C's zone. Without the wider D-zone, the corner defenders only react once
+            // the attacker has already beaten the forwards — leaving the player
+            // facing them one at a time. Forwards keep the default 16m.
             string posUpper = positionName.ToUpperInvariant();
             switch (posUpper)
             {
                 case "LD":
                 case "RD":
-                    ai.HomePullBackDistance = 18f;
+                    ai.HomePullBackDistance = 20f;
                     ai.HomeTuckInDistance = 4f;
+                    ai.ZoneRadius = 25f;
                     break;
                 case "LW":
                 case "RW":
                     ai.HomePullBackDistance = 15f;
                     ai.HomeTuckInDistance = 4f;
+                    ai.ZoneRadius = 16f;
                     break;
                 case "C":
                     ai.HomePullBackDistance = 15f;
                     ai.HomeTuckInDistance = 0f;
+                    ai.ZoneRadius = 16f;
                     break;
             }
 
@@ -135,7 +144,7 @@ namespace PuckAIPractice.Defender
                 ? (inwardDir * Mathf.Cos(angleRad) + attackDir * Mathf.Sin(angleRad)).normalized
                 : Vector3.right;  // C: no inward direction, use pure lateral X
 
-            ai.HomePosition = spawnPos
+            ai.StaticHome = spawnPos
                 + backwardDir * ai.HomePullBackDistance
                 + inwardDir * ai.HomeTuckInDistance;
             ai.PatrolAxis = angledAxis;
@@ -149,7 +158,7 @@ namespace PuckAIPractice.Defender
                 ClientId = clientId,
             });
 
-            Debug.Log($"[Defender] Spawned at {team} {positionName} (clientId={clientId}, spawnPos={spawnPos}, backward={backwardDir}, inward={inwardDir}, axis={ai.PatrolAxis}, home={ai.HomePosition})");
+            Debug.Log($"[Defender] Spawned at {team} {positionName} (clientId={clientId}, spawnPos={spawnPos}, backward={backwardDir}, inward={inwardDir}, axis={ai.PatrolAxis}, staticHome={ai.StaticHome})");
             return player;
         }
 

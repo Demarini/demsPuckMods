@@ -25,7 +25,7 @@ namespace PuckAIPractice.Defender
             var args = (string[])message["args"];
             if (args == null || args.Length < 1)
             {
-                Debug.Log("[Defender] usage: /defender <LW|C|RW|LD|RD> | /defender clear [position]");
+                Debug.Log("[Defender] usage: /defender <LW|C|RW|LD|RD> | /defender all | /defender clear [position]");
                 return false;
             }
 
@@ -50,16 +50,33 @@ namespace PuckAIPractice.Defender
                 return false;
             }
 
-            if (!AllowedPositions.Contains(first))
-            {
-                Debug.Log($"[Defender] invalid position '{args[0]}'. Allowed: LW, C, RW, LD, RD");
-                return false;
-            }
-
+            // Resolve the bot team once from the caller (used by both single-pos
+            // and "all" branches).
             var callerId = (ulong)message["clientId"];
             var caller = PlayerManager.Instance.GetPlayerByClientId(callerId);
             var callerTeam = caller != null ? caller.Team : PlayerTeam.Blue;
             var botTeam = (callerTeam == PlayerTeam.Red) ? PlayerTeam.Blue : PlayerTeam.Red;
+
+            if (first == "ALL")
+            {
+                // Defensemen first so they claim their wider zone before the
+                // forwards arrive — purely cosmetic since the spawner just
+                // skips already-claimed positions.
+                var positions = new[] { "LD", "RD", "C", "LW", "RW" };
+                int spawned = 0;
+                foreach (var pos in positions)
+                {
+                    if (DefenderSpawner.Spawn(botTeam, pos, callerId) != null) spawned++;
+                }
+                Debug.Log($"[Defender] /defender all: spawned {spawned} of {positions.Length} on team {botTeam}");
+                return false;
+            }
+
+            if (!AllowedPositions.Contains(first))
+            {
+                Debug.Log($"[Defender] invalid position '{args[0]}'. Allowed: LW, C, RW, LD, RD, or 'all'");
+                return false;
+            }
 
             DefenderSpawner.Spawn(botTeam, first, callerId);
             return false;
