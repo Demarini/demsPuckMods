@@ -22,6 +22,20 @@ namespace MOTD.Patches
         const string ChunkPrefix = "!MOTDC:";
         const int MaxPayloadBytes = 450;
 
+        // Per-join the original re-read MOTD JSON from disk + parsed it + chunked it. With many
+        // joiners this stalled the server tick; cache the prebuilt outgoing messages keyed on the
+        // file's last-write-time so admins can still edit MOTD.json live and have it picked up.
+        static string _cachedJsonPath;
+        static DateTime _cachedJsonMtime;
+        static string[] _cachedMessages;
+
+        // Reflection lookups are stable for the lifetime of the server; cache the type + method
+        // info and the ChatManager singleton to avoid the AccessTools work per join.
+        static Type _chatManagerType;
+        static MethodInfo _chatManagerInstanceGetter;
+        static MethodInfo _sendChatMethod;
+        static object _chatManagerInstance;
+
         [HarmonyPostfix]
         [HarmonyPatch(typeof(global::SceneManager), "Server_OnClientSceneSynchronizeComplete")]
         static void SyncComplete_Postfix(ulong clientId)
@@ -31,22 +45,24 @@ namespace MOTD.Patches
 
             try
             {
-                ConfigData.Load();
-                if (string.IsNullOrEmpty(ConfigData.Instance.JsonFileLocation)) return;
+                // ConfigData.Instance lazy-loads once; do NOT call Load() per join — it does
+                // synchronous disk I/O + JSON parse on the main thread.
+                var path = ConfigData.Instance.JsonFileLocation;
+                if (string.IsNullOrEmpty(path)) return;
 
-                string json = File.ReadAllText(ConfigData.Instance.JsonFileLocation);
-                string error = "";
-                MOTDSettings doc;
-                ModalDocIO.TryLoad(json, out doc, out error);
+                var messages = GetCachedMessages(path);
+                if (messages == null) return;
 
-                if (error != null || doc == null)
-                {
-                    Debug.Log($"[MOTD] Could not load MOTD doc: {error}");
-                    return;
-                }
+                EnsureChatReflection();
+                if (_sendChatMethod == null) return;
 
-                Debug.Log("[MOTD] Sending MOTD to client " + clientId);
-                SendMotdToClient(json, clientId);
+                if (_chatManagerInstance == null)
+                    _chatManagerInstance = _chatManagerInstanceGetter?.Invoke(null, null);
+                if (_chatManagerInstance == null) { Debug.LogWarning("[MOTD] ChatManager.Instance is null"); return; }
+
+                var targets = new ulong[] { clientId };
+                for (int i = 0; i < messages.Length; i++)
+                    _sendChatMethod.Invoke(_chatManagerInstance, new object[] { messages[i], targets });
             }
             catch (Exception e)
             {
@@ -54,32 +70,59 @@ namespace MOTD.Patches
             }
         }
 
-        static void SendMotdToClient(string json, ulong clientId)
+        // Returns the cached chunked MOTD messages, rebuilding only if the source file changed
+        // since last call. Returns null if the file is missing or the doc fails to parse.
+        static string[] GetCachedMessages(string path)
         {
-            var chatManagerType = AccessTools.TypeByName("ChatManager");
-            if (chatManagerType == null) { Debug.LogWarning("[MOTD] ChatManager not found"); return; }
-            var instance = AccessTools.PropertyGetter(chatManagerType.BaseType, "Instance")?.Invoke(null, null);
-            if (instance == null) { Debug.LogWarning("[MOTD] ChatManager.Instance is null"); return; }
-            var sendMethod = AccessTools.Method(chatManagerType, "Server_SendChatMessageToClients", new Type[] { typeof(string), typeof(ulong[]) });
-            if (sendMethod == null) { Debug.LogWarning("[MOTD] Server_SendChatMessageToClients not found"); return; }
+            if (!File.Exists(path)) return null;
+            var mtime = File.GetLastWriteTimeUtc(path);
 
-            var targets = new ulong[] { clientId };
+            if (_cachedMessages != null && _cachedJsonPath == path && _cachedJsonMtime == mtime)
+                return _cachedMessages;
+
+            string json = File.ReadAllText(path);
+
+            string error = "";
+            MOTDSettings doc;
+            ModalDocIO.TryLoad(json, out doc, out error);
+            if (doc == null)
+            {
+                Debug.Log($"[MOTD] Could not load MOTD doc: {error}");
+                _cachedMessages = null;
+                _cachedJsonPath = path;
+                _cachedJsonMtime = mtime;
+                return null;
+            }
+
             string fullMessage = MOTDCommand + json;
-
+            string[] messages;
             if (Encoding.UTF8.GetByteCount(fullMessage) <= MaxPayloadBytes)
             {
-                sendMethod.Invoke(instance, new object[] { fullMessage, targets });
-                return;
+                messages = new[] { fullMessage };
+            }
+            else
+            {
+                var chunks = ChunkString(json, MaxPayloadBytes - 16); // reserve bytes for "!MOTDC:XX:XX "
+                messages = new string[chunks.Count];
+                for (int i = 0; i < chunks.Count; i++)
+                    messages[i] = $"{ChunkPrefix}{i + 1}:{chunks.Count} {chunks[i]}";
+                Debug.Log($"[MOTD] Cached {chunks.Count} MOTD chunks for {path}");
             }
 
-            // Message too large for single FixedString512Bytes — split into chunks
-            var chunks = ChunkString(json, MaxPayloadBytes - 16); // reserve bytes for "!MOTDC:XX:XX "
-            Debug.Log($"[MOTD] Sending {chunks.Count} chunks to client {clientId}");
-            for (int i = 0; i < chunks.Count; i++)
-            {
-                string msg = $"{ChunkPrefix}{i + 1}:{chunks.Count} {chunks[i]}";
-                sendMethod.Invoke(instance, new object[] { msg, targets });
-            }
+            _cachedMessages = messages;
+            _cachedJsonPath = path;
+            _cachedJsonMtime = mtime;
+            return messages;
+        }
+
+        static void EnsureChatReflection()
+        {
+            if (_chatManagerType != null) return;
+            _chatManagerType = AccessTools.TypeByName("ChatManager");
+            if (_chatManagerType == null) { Debug.LogWarning("[MOTD] ChatManager not found"); return; }
+            _chatManagerInstanceGetter = AccessTools.PropertyGetter(_chatManagerType.BaseType, "Instance");
+            _sendChatMethod = AccessTools.Method(_chatManagerType, "Server_SendChatMessageToClients", new Type[] { typeof(string), typeof(ulong[]) });
+            if (_sendChatMethod == null) Debug.LogWarning("[MOTD] Server_SendChatMessageToClients not found");
         }
 
         static List<string> ChunkString(string s, int maxBytesPerChunk)
@@ -186,17 +229,49 @@ namespace MOTD.Patches
                     SimpleModal.Show(
                         title: doc.ModalDoc.title,
                         richText: ModalDocIO.MdToUnity(doc.ModalDoc.richText),
-                        dontShowKey: "",
+                        dontShowKey: BuildDismissKey(),
                         bannerUrl: doc.ModalDoc.bannerImageUrl,
                         panelBgUrl: doc.ModalDoc.panelImageUrl,
                         height: doc.ModalDoc.panelHeightPercent,
                         width: doc.ModalDoc.panelWidthPercent,
                         theme: doc.Theme,
-                        doc: doc.ModalDoc);
+                        doc: doc.ModalDoc,
+                        version: doc.Version);
                 }
                 else
                 {
                     Debug.Log($"[MOTD] Failed to parse MOTD: {error}");
+                }
+            }
+
+            // Per-server dismissal key. Reads ConnectionManager.UnityTransport.ConnectionData
+            // via reflection so we don't bind to a specific transport assembly. Falls back to
+            // the generic "MOTD" key if anything is unavailable, preserving original behavior.
+            static string BuildDismissKey()
+            {
+                try
+                {
+                    var connMgrType = AccessTools.TypeByName("ConnectionManager");
+                    if (connMgrType == null) return "MOTD";
+                    var instance = AccessTools.PropertyGetter(connMgrType.BaseType, "Instance")?.Invoke(null, null);
+                    if (instance == null) return "MOTD";
+
+                    var transport = Traverse.Create(instance).Field("UnityTransport").GetValue();
+                    if (transport == null) return "MOTD";
+
+                    var connData = Traverse.Create(transport).Property("ConnectionData").GetValue();
+                    if (connData == null) return "MOTD";
+
+                    string address = Traverse.Create(connData).Field("Address").GetValue<string>();
+                    object portObj = Traverse.Create(connData).Field("Port").GetValue();
+                    if (string.IsNullOrEmpty(address) || portObj == null) return "MOTD";
+
+                    return $"MOTD@{address}:{portObj}";
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[MOTD] BuildDismissKey fallback to generic: {e.Message}");
+                    return "MOTD";
                 }
             }
 

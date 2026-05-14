@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace ServerBrowserInGame
 {
-    public class InitializeServerBrowserInGame : IPuckMod
+    public class InitializeServerBrowserInGame : IPuckPlugin
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.ServerBrowserInGame");
 

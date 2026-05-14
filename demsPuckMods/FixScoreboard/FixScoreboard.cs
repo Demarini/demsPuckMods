@@ -11,7 +11,7 @@ using UnityEngine.UIElements;
 
 namespace FixScoreboard
 {  
-    public class FixScoreboard : IPuckMod
+    public class FixScoreboard : IPuckPlugin
     {
         private static readonly Harmony harmony = new Harmony("GAFURIX.FixScoreboard");
 

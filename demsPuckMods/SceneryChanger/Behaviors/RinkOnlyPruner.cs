@@ -223,16 +223,11 @@ namespace SceneryLoader.Behaviors
             RemoveArena.HideArena();
             RemoveArena.HideEverythingExceptRink(scene);
             RemoveArena.TryPruneScene(scene, "SCENE LOADED");
-            ReflectionKiller.NukeAllReflections();
+            // Reflection policy is applied AFTER bundle instantiation by RinkSceneLoader so we
+            // can keep bundle-authored probes alive while killing the now-stale game probes.
             RenderSettings.skybox = null;
-            foreach (var light in GameObject.FindObjectsOfType<Light>(true))
-            {
-                if (light.enabled)
-                {
-                    Debug.Log($"[LightKiller] Disabling game light ‘{light.name}’ on ‘{light.transform.parent?.name}’ (type={light.type}, intensity={light.intensity})");
-                    light.enabled = false;
-                }
-            }
+            // Light disable/preserve policy moved to RinkSceneLoader.ApplyGameLightPolicy so it
+            // can read AssetInformation (e.g. keepGameLights for per-bundle vanilla-ish look).
         }
         //public static void LoadScene(SM.Scene scene, string assetBundle, string prefab, string skyBox, string contentKey64)
         //{

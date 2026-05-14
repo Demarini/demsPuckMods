@@ -35,6 +35,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SceneryLoader", "SceneryCha
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PuckNew", "PuckNew\PuckNew.csproj", "{AC790B56-3A5F-4AF1-86EB-0F6A002ECF51}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AutoJoin", "AutoJoin\AutoJoin.csproj", "{A1B2C3D4-5E6F-7A8B-9C0D-E1F2A3B4C5D6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -101,6 +103,10 @@ Global
 		{7E9B04C4-66FB-4930-8477-11F9A8D32FC0}.Release|Any CPU.Build.0 = Release|Any CPU
 		{AC790B56-3A5F-4AF1-86EB-0F6A002ECF51}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{AC790B56-3A5F-4AF1-86EB-0F6A002ECF51}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-5E6F-7A8B-9C0D-E1F2A3B4C5D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-5E6F-7A8B-9C0D-E1F2A3B4C5D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-5E6F-7A8B-9C0D-E1F2A3B4C5D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-5E6F-7A8B-9C0D-E1F2A3B4C5D6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

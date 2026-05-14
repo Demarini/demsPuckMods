@@ -17,7 +17,9 @@ dotnet build demsPuckMods.sln
 
 Target framework: **.NET Framework 4.8**. All projects produce class library `.dll` outputs.
 
-**Deployment:** Several mod projects have post-build targets that copy the compiled DLL directly to the Steam game plugin directory (e.g. `A:\SteamLibrary\steamapps\common\Puck\Plugins\<ModName>`). These paths are hardcoded to the developer's local machine in the `.csproj` files — update them if deploying from a different machine.
+**Deployment:** Every mod's `.csproj` has a `PostBuildMoveDll` target that copies the compiled DLL to `$(PuckInstallDir)\Plugins\<ModName>\`. `$(PuckInstallDir)` is defined once in `demsPuckMods/Directory.Build.props` (currently `E:\SteamLibrary\steamapps\common\Puck`) — change it there to relocate every deploy at once. When publishing to Steam Workshop, `publish.ps1` overrides this property to a staging folder so live game install isn't touched.
+
+**Steam Workshop publishing:** Use `publish.ps1` at the repo root. It reads `workshop.json` (the mod registry) and invokes SteamCMD. Common commands: `.\publish.ps1 list`, `.\publish.ps1 all "<changenote>"`, `.\publish.ps1 <ModName> "<changenote>"`. See `UPDATE_PLAYBOOK.md` for full workflow.
 
 There are no tests or linting tools configured.
 

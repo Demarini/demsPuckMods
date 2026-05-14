@@ -37,6 +37,19 @@ namespace PuckAIPractice.Utilities
                 return;
             }
 
+            // Reject duplicate spawn: if a bot for this team already exists in the
+            // registry, a 2nd SpawnWithOwnership call would create an orphan
+            // NetworkObject sharing the same fake clientId — the registry's
+            // OwnerClientId-uniqueness check then silently drops the new entry,
+            // and the orphan sticks around with its own GoalieAI until the next
+            // phase cleanup ("stacked goalies in the net" bug).
+            FakePlayerRegistry.CleanupDestroyed();
+            if (FakePlayerRegistry.HasBotForTeam(team))
+            {
+                Debug.Log($"[BotSpawning] {team} bot already exists; skipping duplicate SpawnChaser");
+                return;
+            }
+
             var prefab = Traverse.Create(playerManager).Field("playerPrefab").GetValue<Player>();
             if (prefab == null)
             {
@@ -103,6 +116,13 @@ namespace PuckAIPractice.Utilities
             var playerManager = PlayerManager.Instance;
             if (playerManager == null)
             {
+                return;
+            }
+
+            FakePlayerRegistry.CleanupDestroyed();
+            if (FakePlayerRegistry.HasBotForTeam(team))
+            {
+                Debug.Log($"[BotSpawning] {team} bot already exists; skipping duplicate SpawnFakePlayer");
                 return;
             }
 

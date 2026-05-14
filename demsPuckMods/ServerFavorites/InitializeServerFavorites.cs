@@ -11,7 +11,7 @@ using UnityEngine;
 
 namespace ServerFavorites
 {
-    public class InitializeServerFavorites : IPuckMod
+    public class InitializeServerFavorites : IPuckPlugin
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.ServerBrowserInGame");
 

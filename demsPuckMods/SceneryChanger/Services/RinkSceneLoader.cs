@@ -96,6 +96,10 @@ namespace SceneryChanger.Services
             stagedRoot.transform.SetParent(container.transform, true);
 
             RebindShadersToGameRuntime(stagedRoot);
+            ConfigureMainSun(stagedRoot, info);
+            ApplyBundleShadowCasting(stagedRoot, info);
+            ReflectionKiller.ApplyReflectionPolicy(stagedRoot, info != null && info.keepReflections);
+            ApplyGameLightPolicy(stagedRoot, info);
             SetupMusic(stagedRoot, info, resolved?.FolderPath);
             SetupAmbientAudio(stagedRoot, info, resolved?.FolderPath);
             if (info != null)
@@ -130,9 +134,315 @@ namespace SceneryChanger.Services
 
             // --- Spectators: search inside the staged prefab and tag positions ---
             yield return SpawnSpectatorsFromStagedRoot(stagedRoot, token);
-            
+
+            // --- Diagnostic: dump lighting/shadow state after everything settles ---
+            CoroutineRunner.Instance.StartCoroutine(DumpLightingStateDelayed(stagedRoot, 1.5f));
+
             // Optional cleanup of stray legacy objects AFTER swap
             //ClearLegacyOutsideContainer(); // see helper below (non-blocking)
+        }
+
+        // Selects the URP main directional light that will produce the scene's shadow pass.
+        // Priority: the game's preserved original directional (kept alive by RinkOnlyPruner's
+        // RemoveHangar) — it already has correct culling and bias for the stick. If that's
+        // gone, falls back to a Directional Light named "MainSun" inside the bundle.
+        // The game's URP asset has supportsAdditionalLightShadows=false, so only this main
+        // directional can cast shadows — strobe/decorative directionals in the bundle stay
+        // off the shadow path regardless of their settings.
+        static void ConfigureMainSun(GameObject stagedRoot, AssetInformation info)
+        {
+            try
+            {
+                bool useGameDir = info == null || info.useGameDirectional;
+                Light gameDirectional = FindGameDirectional(stagedRoot);
+
+                if (useGameDir && gameDirectional != null)
+                {
+                    gameDirectional.enabled = true;
+                    if (gameDirectional.shadows == LightShadows.None) gameDirectional.shadows = LightShadows.Soft;
+
+                    if (info != null && info.gameDirectionalShadowStrength >= 0f)
+                        gameDirectional.shadowStrength = info.gameDirectionalShadowStrength;
+                    else if (gameDirectional.shadowStrength < 0.01f)
+                        gameDirectional.shadowStrength = 1f;
+
+                    float originalIntensity = gameDirectional.intensity;
+                    if (info != null && info.gameDirectionalIntensity >= 0f)
+                        gameDirectional.intensity = info.gameDirectionalIntensity;
+
+                    RenderSettings.sun = gameDirectional;
+                    Debug.Log($"[SceneLoader] MainSun: using game directional '{gameDirectional.name}' parent='{gameDirectional.transform.parent?.name}' " +
+                              $"intensity={gameDirectional.intensity:F2} (was {originalIntensity:F2}) " +
+                              $"shadows={gameDirectional.shadows} strength={gameDirectional.shadowStrength:F2}");
+                    return;
+                }
+
+                // Asked not to use the game directional — disable it so URP can't auto-pick it as main.
+                if (!useGameDir && gameDirectional != null)
+                {
+                    gameDirectional.enabled = false;
+                    Debug.Log($"[SceneLoader] MainSun: useGameDirectional=false, disabled game directional '{gameDirectional.name}'");
+                }
+
+                Light bundleMain = FindBundleMainSun(stagedRoot);
+                if (bundleMain == null)
+                {
+                    Debug.LogWarning(useGameDir
+                        ? "[SceneLoader] No game directional preserved and no bundle 'MainSun' found. Scene will have no main-light shadows."
+                        : "[SceneLoader] useGameDirectional=false but bundle has no 'MainSun' directional. Scene will have no main-light shadows.");
+                    RenderSettings.sun = null;
+                    return;
+                }
+
+                bundleMain.enabled = true;
+                if (bundleMain.shadows == LightShadows.None) bundleMain.shadows = LightShadows.Soft;
+                if (bundleMain.shadowStrength < 0.01f) bundleMain.shadowStrength = 1f;
+                RenderSettings.sun = bundleMain;
+
+                if (!bundleMain.gameObject.activeInHierarchy)
+                    Debug.LogWarning($"[SceneLoader] Bundle MainSun '{bundleMain.name}' is NOT active in hierarchy — " +
+                                     "shadows will not render until it's active.");
+
+                Debug.Log($"[SceneLoader] MainSun: using bundle 'MainSun' '{bundleMain.name}' parent='{bundleMain.transform.parent?.name}' " +
+                          $"activeInHierarchy={bundleMain.gameObject.activeInHierarchy} intensity={bundleMain.intensity:F2} " +
+                          $"shadows={bundleMain.shadows} strength={bundleMain.shadowStrength:F2}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneLoader] ConfigureMainSun failed: {e.Message}");
+            }
+        }
+
+        // Find the game's original directional light — an active directional that's NOT inside
+        // the staged bundle root. Strobes/decorative directionals authored in bundles are skipped.
+        static Light FindGameDirectional(GameObject stagedRoot)
+        {
+            var all = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Light fallback = null;
+            foreach (var l in all)
+            {
+                if (l == null || l.type != LightType.Directional) continue;
+                if (stagedRoot != null && l.transform.IsChildOf(stagedRoot.transform)) continue;
+                if (!l.gameObject.activeInHierarchy) { fallback = fallback ?? l; continue; }
+                return l;
+            }
+            return fallback;
+        }
+
+        // Decide what to do with the game's non-directional point/spot lights (the directional is
+        // handled separately by ConfigureMainSun). Default behavior disables them — this kills the
+        // hangar's ambient lit look but is desirable for moody bundles. When keepGameLights=true,
+        // they stay alive so the URP/Lit shader's specular pass gives the ice the small bright
+        // dots you see in the vanilla arena.
+        static void ApplyGameLightPolicy(GameObject stagedRoot, AssetInformation info)
+        {
+            try
+            {
+                bool keep = info != null && info.keepGameLights;
+                int kept = 0, disabled = 0;
+                foreach (var l in UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                {
+                    if (l == null) continue;
+                    if (l.type == LightType.Directional) continue;
+                    if (stagedRoot != null && l.transform.IsChildOf(stagedRoot.transform)) continue;
+                    if (keep)
+                    {
+                        l.enabled = true;
+                        kept++;
+                    }
+                    else
+                    {
+                        if (l.enabled) { l.enabled = false; disabled++; }
+                    }
+                }
+                Debug.Log($"[GameLightPolicy] keepGameLights={keep} kept={kept} disabled={disabled} (game point/spot lights outside staged root)");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[GameLightPolicy] failed: {e.Message}");
+            }
+        }
+
+        // Flip bundle renderers' shadowCastingMode based on propsCastShadows. Default-off avoids
+        // rendering hundreds of decorative meshes into the shadow map every frame (×cascades).
+        // Only the game's player/stick (outside the staged root) needs to be a caster for the
+        // ice shadow we actually care about.
+        static void ApplyBundleShadowCasting(GameObject stagedRoot, AssetInformation info)
+        {
+            if (stagedRoot == null) return;
+            try
+            {
+                bool castShadows = info != null && info.propsCastShadows;
+                var target = castShadows ? ShadowCastingMode.On : ShadowCastingMode.Off;
+                int changed = 0, total = 0;
+                foreach (var r in stagedRoot.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    total++;
+                    if (r.shadowCastingMode != target)
+                    {
+                        r.shadowCastingMode = target;
+                        changed++;
+                    }
+                }
+                Debug.Log($"[SceneLoader] Bundle shadow casting: propsCastShadows={castShadows} -> set {target} on {changed}/{total} renderers");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneLoader] ApplyBundleShadowCasting failed: {e.Message}");
+            }
+        }
+
+        static Light FindBundleMainSun(GameObject stagedRoot)
+        {
+            if (stagedRoot == null) return null;
+            foreach (var l in stagedRoot.GetComponentsInChildren<Light>(true))
+            {
+                if (l == null || l.type != LightType.Directional) continue;
+                if (l.name.Equals("MainSun", StringComparison.OrdinalIgnoreCase)) return l;
+            }
+            return null;
+        }
+
+        static IEnumerator DumpLightingStateDelayed(GameObject stagedRoot, float delaySec)
+        {
+            yield return new WaitForSeconds(delaySec);
+            DumpLightingState(stagedRoot);
+        }
+
+        static void DumpLightingState(GameObject stagedRoot)
+        {
+            try
+            {
+                // ===== Render pipeline & quality =====
+                var pipeline = GraphicsSettings.currentRenderPipeline;
+                Debug.Log($"[SceneLoader][Light] Pipeline='{pipeline?.GetType().FullName ?? "BuiltIn"}' " +
+                          $"qShadows={QualitySettings.shadows} shadowDistance={QualitySettings.shadowDistance} " +
+                          $"cascades={QualitySettings.shadowCascades} shadowRes={QualitySettings.shadowResolution} " +
+                          $"projection={QualitySettings.shadowProjection} shadowmaskMode={QualitySettings.shadowmaskMode}");
+
+                // Probe URP/HDRP asset for shadow toggles via reflection (works without compile-time URP dep)
+                if (pipeline != null)
+                {
+                    var pType = pipeline.GetType();
+                    string[] interesting = {
+                        "supportsMainLightShadows", "mainLightShadowmapResolution",
+                        "supportsAdditionalLightShadows", "additionalLightsShadowmapResolution",
+                        "supportsSoftShadows", "shadowDistance", "shadowCascadeCount",
+                        "mainLightRenderingMode", "additionalLightsRenderingMode",
+                        "supportsHDR", "useSRPBatcher"
+                    };
+                    var bf = System.Reflection.BindingFlags.Instance |
+                             System.Reflection.BindingFlags.NonPublic |
+                             System.Reflection.BindingFlags.Public;
+                    foreach (var name in interesting)
+                    {
+                        try
+                        {
+                            var prop = pType.GetProperty(name, bf);
+                            if (prop != null) { Debug.Log($"[SceneLoader][Light] Pipeline.{name}={prop.GetValue(pipeline)}"); continue; }
+                            var field = pType.GetField(name, bf);
+                            if (field != null) Debug.Log($"[SceneLoader][Light] Pipeline.{name}={field.GetValue(pipeline)}");
+                        }
+                        catch (Exception e) { Debug.Log($"[SceneLoader][Light] Pipeline.{name} read failed: {e.Message}"); }
+                    }
+                }
+
+                // ===== RenderSettings =====
+                Debug.Log($"[SceneLoader][Light] RenderSettings ambientMode={RenderSettings.ambientMode} " +
+                          $"ambientLight={RenderSettings.ambientLight} ambientIntensity={RenderSettings.ambientIntensity:F2} " +
+                          $"skybox='{(RenderSettings.skybox != null ? RenderSettings.skybox.name : "<null>")}' " +
+                          $"defaultReflectionMode={RenderSettings.defaultReflectionMode} " +
+                          $"reflectionIntensity={RenderSettings.reflectionIntensity:F2} " +
+                          $"sun='{(RenderSettings.sun != null ? RenderSettings.sun.name : "<null>")}'");
+
+                // ===== All Light components in the scene =====
+                var allLights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                int dirCount = 0, enabledActive = 0, shadowCasters = 0;
+                Debug.Log($"[SceneLoader][Light] Total Light components in scene: {allLights.Length}");
+                foreach (var l in allLights)
+                {
+                    if (l == null) continue;
+                    bool inStaged = stagedRoot != null && l.transform.IsChildOf(stagedRoot.transform);
+                    bool active = l.gameObject.activeInHierarchy;
+                    if (l.enabled && active) enabledActive++;
+                    if (l.type == LightType.Directional) dirCount++;
+                    if (l.enabled && active && l.shadows != LightShadows.None) shadowCasters++;
+
+                    // NOTE: Light.lightmapBakeType is editor-only; at runtime we only see bakingOutput.
+                    // bakingOutput.isBaked==false means the scene wasn't baked (the common case for
+                    // dynamically-loaded bundles). If isBaked==true and lightmapBakeType==Baked, that
+                    // means runtime shadows on dynamic meshes are impossible — light only baked.
+                    var bo = l.bakingOutput;
+                    Debug.Log($"[SceneLoader][Light]  - '{l.name}' parent='{l.transform.parent?.name}' inStaged={inStaged} " +
+                              $"type={l.type} enabled={l.enabled} active={active} " +
+                              $"bakeIsBaked={bo.isBaked} bakeType={bo.lightmapBakeType} mixedMode={bo.mixedLightingMode} " +
+                              $"shadows={l.shadows} shadowStrength={l.shadowStrength:F2} " +
+                              $"shadowRes={l.shadowResolution} shadowBias={l.shadowBias:F3} normalBias={l.shadowNormalBias:F3} " +
+                              $"intensity={l.intensity:F2} bounce={l.bounceIntensity:F2} range={l.range:F1} " +
+                              $"renderMode={l.renderMode} cullingMask=0x{l.cullingMask:X8}");
+                }
+                Debug.Log($"[SceneLoader][Light] Summary: directional={dirCount} enabled&active={enabledActive} shadowCasters={shadowCasters}");
+
+                // ===== Player / stick renderers (the things we want shadows ON) =====
+                var allRenderers = UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                var playerLike = allRenderers
+                    .Where(r => r != null && !r.transform.IsChildOf(stagedRoot != null ? stagedRoot.transform : null) &&
+                                (r.name.IndexOf("stick", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("player", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("puck", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("body", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("skater", StringComparison.OrdinalIgnoreCase) >= 0))
+                    .Take(15).ToList();
+                Debug.Log($"[SceneLoader][Light] Player-like renderers sampled: {playerLike.Count}");
+                foreach (var r in playerLike)
+                {
+                    Debug.Log($"[SceneLoader][Light]  P '{r.name}' parent='{r.transform.parent?.name}' " +
+                              $"layer={r.gameObject.layer}({LayerMask.LayerToName(r.gameObject.layer)}) " +
+                              $"shadowCastingMode={r.shadowCastingMode} receiveShadows={r.receiveShadows} " +
+                              $"enabled={r.enabled} active={r.gameObject.activeInHierarchy} " +
+                              $"shader='{(r.sharedMaterial != null && r.sharedMaterial.shader != null ? r.sharedMaterial.shader.name : "<null>")}'");
+                }
+
+                // ===== Ice / rink renderers (the things we want shadows ON) =====
+                var iceLike = allRenderers
+                    .Where(r => r != null &&
+                                (r.name.IndexOf("ice", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("rink", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                 r.name.IndexOf("floor", StringComparison.OrdinalIgnoreCase) >= 0))
+                    .Take(10).ToList();
+                Debug.Log($"[SceneLoader][Light] Ice/rink-like renderers sampled: {iceLike.Count}");
+                foreach (var r in iceLike)
+                {
+                    Debug.Log($"[SceneLoader][Light]  I '{r.name}' parent='{r.transform.parent?.name}' " +
+                              $"layer={r.gameObject.layer}({LayerMask.LayerToName(r.gameObject.layer)}) " +
+                              $"shadowCastingMode={r.shadowCastingMode} receiveShadows={r.receiveShadows} " +
+                              $"shader='{(r.sharedMaterial != null && r.sharedMaterial.shader != null ? r.sharedMaterial.shader.name : "<null>")}'");
+                }
+
+                // ===== Layers a directional light culls in vs renderer layers in use =====
+                var dirLights = allLights.Where(l => l != null && l.type == LightType.Directional && l.enabled && l.gameObject.activeInHierarchy).ToList();
+                if (dirLights.Count > 0)
+                {
+                    var rendererLayers = new HashSet<int>();
+                    foreach (var r in allRenderers)
+                        if (r != null && r.enabled && r.gameObject.activeInHierarchy)
+                            rendererLayers.Add(r.gameObject.layer);
+                    foreach (var dl in dirLights)
+                    {
+                        var missed = rendererLayers.Where(layer => (dl.cullingMask & (1 << layer)) == 0).ToList();
+                        if (missed.Count > 0)
+                        {
+                            var missedNames = string.Join(", ", missed.Select(l => $"{l}({LayerMask.LayerToName(l)})"));
+                            Debug.LogWarning($"[SceneLoader][Light] Directional light '{dl.name}' does NOT illuminate layers: {missedNames}");
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[SceneLoader][Light] DumpLightingState failed: {e}");
+            }
         }
         static void SetupMusic(GameObject root, AssetInformation info, string bundleFolder)
         {

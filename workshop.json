@@ -1,87 +1,97 @@
-{
-    "steamcmd_path": "E:\\SteamCMD",
-    "app_id": "2994020",
-    "steam_login": "Demarini",
-    "staging_dir": "E:\\SteamCMD\\staging",
-    "puck_install_dir": "E:\\SteamLibrary\\steamapps\\common\\Puck",
-    "mods": {
-        "ModifyMinimapIcons": {
-            "publishedfileid": "3537113445",
-            "csproj": "demsPuckMods\\ModifyMinimapIcons\\ModifyMinimapIcons.csproj",
-            "plugin_folder": "ModifyMinimapIcons",
-            "active": true
-        },
-        "PuckAIPractice": {
-            "publishedfileid": "3543744568",
-            "csproj": "demsPuckMods\\PuckAIPractice\\PuckAIPractice.csproj",
-            "plugin_folder": "PuckAIPractice",
-            "active": true
-        },
-        "SceneryLoader": {
-            "publishedfileid": "3566470321",
-            "csproj": "demsPuckMods\\SceneryChanger\\SceneryLoader.csproj",
-            "plugin_folder": "SceneryLoader",
-            "active": true
-        },
-        "InputControl": {
-            "publishedfileid": "3539688632",
-            "csproj": "demsPuckMods\\demsInputControl\\demsInputControl.csproj",
-            "plugin_folder": "InputControl",
-            "active": true
-        },
-        "RotateMinimap": {
-            "publishedfileid": "3536070072",
-            "csproj": "demsPuckMods\\RotateMinimap\\RotateMinimap.csproj",
-            "plugin_folder": "RotateMinimap",
-            "active": true
-        },
-        "MOTD": {
-            "publishedfileid": "3554730098",
-            "csproj": "demsPuckMods\\TestProject\\MOTD.csproj",
-            "plugin_folder": "MOTD",
-            "active": true
-        },
-        "BanIdiots": {
-            "publishedfileid": "",
-            "csproj": "demsPuckMods\\BanIdiots\\BanIdiots.csproj",
-            "plugin_folder": "BanIdiots",
-            "active": false
-        },
-        "FixChat": {
-            "publishedfileid": "",
-            "csproj": "demsPuckMods\\FixChat\\FixChat.csproj",
-            "plugin_folder": "FixChat",
-            "active": false
-        },
-        "FixScoreboard": {
-            "publishedfileid": "3538336529",
-            "csproj": "demsPuckMods\\FixScoreboard\\FixScoreboard.csproj",
-            "plugin_folder": "FixScoreboard",
-            "active": false
-        },
-        "DelayInputs": {
-            "publishedfileid": "",
-            "csproj": "demsPuckMods\\DelayInputs\\DelayInputs.csproj",
-            "plugin_folder": "DelayInputs",
-            "active": false
-        },
-        "ServerBrowserInGame": {
-            "publishedfileid": "3549138879",
-            "csproj": "demsPuckMods\\ServerBrowserInGame\\ServerBrowserInGame.csproj",
-            "plugin_folder": "ServerBrowserInGame",
-            "active": false
-        },
-        "ServerFavorites": {
-            "publishedfileid": "3551287814",
-            "csproj": "demsPuckMods\\ServerFavorites\\ServerFavorites.csproj",
-            "plugin_folder": "ServerFavorites",
-            "active": false
-        },
-        "PlayerStickRadius": {
-            "publishedfileid": "",
-            "csproj": "demsPuckMods\\PlayerStickRadius\\PlayerStickRadius.csproj",
-            "plugin_folder": "PlayerStickRadius",
-            "active": false
-        }
-    }
+﻿{
+    "steamcmd_path":  "E:\\SteamCMD",
+    "app_id":  "2994020",
+    "steam_login":  "Demarini",
+    "staging_dir":  "E:\\SteamCMD\\staging",
+    "puck_install_dir":  "E:\\SteamLibrary\\steamapps\\common\\Puck",
+    "mods":  {
+                 "ModifyMinimapIcons":  {
+                                            "publishedfileid":  "3537113445",
+                                            "csproj":  "demsPuckMods\\ModifyMinimapIcons\\ModifyMinimapIcons.csproj",
+                                            "plugin_folder":  "ModifyMinimapIcons",
+                                            "active":  true
+                                        },
+                 "PuckAIPractice":  {
+                                        "publishedfileid":  "3543744568",
+                                        "csproj":  "demsPuckMods\\PuckAIPractice\\PuckAIPractice.csproj",
+                                        "plugin_folder":  "PuckAIPractice",
+                                        "active":  true
+                                    },
+                 "SceneryLoader":  {
+                                       "publishedfileid":  "3566470321",
+                                       "csproj":  "demsPuckMods\\SceneryChanger\\SceneryLoader.csproj",
+                                       "plugin_folder":  "SceneryLoader",
+                                       "active":  true
+                                   },
+                 "InputControl":  {
+                                      "publishedfileid":  "3539688632",
+                                      "csproj":  "demsPuckMods\\demsInputControl\\demsInputControl.csproj",
+                                      "plugin_folder":  "InputControl",
+                                      "active":  true
+                                  },
+                 "RotateMinimap":  {
+                                       "publishedfileid":  "3536070072",
+                                       "csproj":  "demsPuckMods\\RotateMinimap\\RotateMinimap.csproj",
+                                       "plugin_folder":  "RotateMinimap",
+                                       "active":  true
+                                   },
+                 "MOTD":  {
+                              "publishedfileid":  "3554730098",
+                              "csproj":  "demsPuckMods\\TestProject\\MOTD.csproj",
+                              "plugin_folder":  "MOTD",
+                              "active":  true
+                          },
+                 "BanIdiots":  {
+                                   "publishedfileid":  "",
+                                   "csproj":  "demsPuckMods\\BanIdiots\\BanIdiots.csproj",
+                                   "plugin_folder":  "BanIdiots",
+                                   "active":  false
+                               },
+                 "FixChat":  {
+                                 "publishedfileid":  "",
+                                 "csproj":  "demsPuckMods\\FixChat\\FixChat.csproj",
+                                 "plugin_folder":  "FixChat",
+                                 "active":  false
+                             },
+                 "FixScoreboard":  {
+                                       "publishedfileid":  "3538336529",
+                                       "csproj":  "demsPuckMods\\FixScoreboard\\FixScoreboard.csproj",
+                                       "plugin_folder":  "FixScoreboard",
+                                       "active":  false
+                                   },
+                 "DelayInputs":  {
+                                     "publishedfileid":  "",
+                                     "csproj":  "demsPuckMods\\DelayInputs\\DelayInputs.csproj",
+                                     "plugin_folder":  "DelayInputs",
+                                     "active":  false
+                                 },
+                 "ServerBrowserInGame":  {
+                                             "publishedfileid":  "3549138879",
+                                             "csproj":  "demsPuckMods\\ServerBrowserInGame\\ServerBrowserInGame.csproj",
+                                             "plugin_folder":  "ServerBrowserInGame",
+                                             "active":  false
+                                         },
+                 "ServerFavorites":  {
+                                         "publishedfileid":  "3551287814",
+                                         "csproj":  "demsPuckMods\\ServerFavorites\\ServerFavorites.csproj",
+                                         "plugin_folder":  "ServerFavorites",
+                                         "active":  false
+                                     },
+                 "PlayerStickRadius":  {
+                                           "publishedfileid":  "",
+                                           "csproj":  "demsPuckMods\\PlayerStickRadius\\PlayerStickRadius.csproj",
+                                           "plugin_folder":  "PlayerStickRadius",
+                                           "active":  false
+                                       }
+             },
+    "scenery_maps_root":  "demsPuckMods\\SceneryMaps",
+    "scenery_maps":  {
+                         "DanceClub":  {
+                                           "publishedfileid":  "3724541004",
+                                           "source_dir":  "demsPuckMods\\SceneryMaps\\DanceClub",
+                                           "title":  "DanceClub - Puck Scenery",
+                                           "description":  "Custom dance club scenery map for the Puck SceneryLoader mod. Requires SceneryLoader to be installed and the server to point at this bundle.",
+                                           "active":  true
+                                       }
+                     }
 }

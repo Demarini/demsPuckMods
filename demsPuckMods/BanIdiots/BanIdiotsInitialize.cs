@@ -8,7 +8,7 @@ using BanIdiots.Config;
 using BanIdiots.Patches;
 namespace BanIdiots
 {
-    public class BanIdiots : IPuckMod
+    public class BanIdiots : IPuckPlugin
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.BanIdiots");
         public bool OnDisable()

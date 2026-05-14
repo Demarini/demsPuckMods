@@ -10,7 +10,7 @@ namespace PuckUtilities
 {
     public static class HarmonyUtils
     {
-        public static PlayerBodyV2 GetPlayerBody(PlayerInput input)
+        public static PlayerBody GetPlayerBody(PlayerInput input)
         {
             var playerProp = AccessTools.Property(input.GetType(), "Player");
             var playerObj = playerProp?.GetValue(input);
@@ -18,7 +18,7 @@ namespace PuckUtilities
                 return null;
 
             var bodyProp = AccessTools.Property(playerObj.GetType(), "PlayerBody");
-            var playerBody = bodyProp?.GetValue(playerObj) as PlayerBodyV2;
+            var playerBody = bodyProp?.GetValue(playerObj) as PlayerBody;
             return playerBody;
         }
     }

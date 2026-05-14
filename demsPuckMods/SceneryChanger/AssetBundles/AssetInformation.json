@@ -1,0 +1,12 @@
+{
+    "useGlass": false,
+    "useCustomAmbient": true,
+    "ambientMultiplier": 1.0,
+    "musicEnabled": false,
+    "musicPath": "",
+    "musicVolume": 0.5,
+    "ambientAudioEnabled": false,
+    "ambientAudioPath": "",
+    "ambientAudioVolume": 0.30000001192092898,
+    "goalCrowdNoiseVolume": 0.09799999743700028
+}

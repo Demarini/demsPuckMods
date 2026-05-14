@@ -9,11 +9,14 @@ namespace MOTD.Models
 {
     public static class ModalPrefs
     {
-        const string Prefix = "YourMod.Modal.Hide.";
-        public static bool GetHide(string key) => PlayerPrefs.GetInt(Prefix + key, 0) == 1;
-        public static void SetHide(string key, bool hide)
+        const string VersionPrefix = "YourMod.Modal.DismissedVersion.";
+
+        public static int GetDismissedVersion(string key) =>
+            PlayerPrefs.GetInt(VersionPrefix + key, 0);
+
+        public static void SetDismissedVersion(string key, int version)
         {
-            PlayerPrefs.SetInt(Prefix + key, hide ? 1 : 0);
+            PlayerPrefs.SetInt(VersionPrefix + key, version);
             PlayerPrefs.Save();
         }
     }

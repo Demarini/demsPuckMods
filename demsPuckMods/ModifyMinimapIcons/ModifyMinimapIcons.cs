@@ -211,7 +211,7 @@ namespace ModifyMinimapIcons
         }
     }
 
-    public class ModifyMinimapIcons : IPuckMod
+    public class ModifyMinimapIcons : IPuckPlugin
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.ModifyMinimapIcons");
 

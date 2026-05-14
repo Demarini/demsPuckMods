@@ -1,0 +1,145 @@
+[h1]MOTD - Message of the Day[/h1]
+
+Display a fully customizable welcome screen to players when they join your server. Show server rules, announcements, links to your Discord, and more.
+
+[h2]Setup[/h2]
+
+[olist]
+[*] Install the mod into your server's Plugins folder.
+[*] On first launch, a [b]MOTDConfig.local.json[/b] file is created next to the mod DLL.
+[*] Open that file and set [b]jsonFileLocation[/b] to the full path of your MOTD content file:
+[code]
+{
+  "jsonFileLocation": "C:\\path\\to\\your\\MOTD.json"
+}
+[/code]
+[*] Create the MOTD.json file at that path (see the full example below).
+[*] When a player connects, the server reads the file and sends it to the client automatically.
+[/olist]
+
+[b]Note:[/b] The mod reads the JSON file on every player connect, so you can edit it at any time without restarting the server.
+
+[h2]Version Control ("Don't Show Again")[/h2]
+
+The MOTD supports a [b]version[/b] number that controls whether players see the message again after checking "Don't show again."
+
+[list]
+[*] When a player checks the "Don't show again" checkbox and closes the panel, their client saves that version number locally.
+[*] On their next connect, if the server's version is the same or lower, the MOTD is skipped.
+[*] When you want everyone to see the MOTD again (new rules, new season, etc.), increase the version number. Any number higher than the previous one will work.
+[*] If the [b]version[/b] property is missing from the JSON, the MOTD is always shown and the checkbox is hidden.
+[/list]
+
+Example: You set version to 5. A player checks "Don't show again." Later you update your rules and set version to 6. That player will see the MOTD again.
+
+[h2]MOTD JSON Reference[/h2]
+
+[h3]Top-Level Properties[/h3]
+[table]
+[tr][th]Property[/th][th]Type[/th][th]Description[/th][/tr]
+[tr][td]version[/td][td]integer[/td][td]MOTD version number. Increase this to force the message to reappear for all players. If omitted, the MOTD always shows.[/td][/tr]
+[tr][td]modalDoc[/td][td]object[/td][td]The content and layout of the MOTD panel (see below).[/td][/tr]
+[tr][td]theme[/td][td]object[/td][td]Color customization for every UI element (see below).[/td][/tr]
+[/table]
+
+[h3]modalDoc Properties[/h3]
+[table]
+[tr][th]Property[/th][th]Type[/th][th]Default[/th][th]Description[/th][/tr]
+[tr][td]title[/td][td]string[/td][td][/td][td]Panel title. Supports Unity rich text tags (bold, color, size, etc.). Hidden automatically when a banner image loads successfully.[/td][/tr]
+[tr][td]richText[/td][td]string[/td][td][/td][td]Body content. Supports Unity rich text. Use [i]<br/>[/i] or [i]<br>[/i] for line breaks.[/td][/tr]
+[tr][td]bannerImageUrl[/td][td]string[/td][td][/td][td]URL to a banner image displayed at the top of the panel. When present, replaces the title text. Maintains aspect ratio.[/td][/tr]
+[tr][td]panelImageUrl[/td][td]string[/td][td][/td][td]URL to a background image for the panel. Displayed behind the content with a slight dark tint overlay.[/td][/tr]
+[tr][td]panelWidthPercent[/td][td]float[/td][td]60[/td][td]Panel width as a percentage of the screen (10-100).[/td][/tr]
+[tr][td]panelHeightPercent[/td][td]float[/td][td]80[/td][td]Panel height as a percentage of the screen (10-100).[/td][/tr]
+[tr][td]closeDelaySeconds[/td][td]integer[/td][td]0[/td][td]Countdown in seconds before the player can close the panel. 0 = no delay.[/td][/tr]
+[tr][td]blockEscDuringDelay[/td][td]bool[/td][td]true[/td][td]Prevents pressing ESC to close while the countdown is active.[/td][/tr]
+[tr][td]blockClickOutsideDuringDelay[/td][td]bool[/td][td]true[/td][td]Prevents clicking outside the panel to close while the countdown is active.[/td][/tr]
+[tr][td]buttons[/td][td]array[/td][td][][/td][td]List of image buttons displayed in the footer (Discord, website links, etc.).[/td][/tr]
+[/table]
+
+[h3]Button Properties[/h3]
+
+Each entry in the [b]buttons[/b] array creates a clickable image button in the panel footer.
+
+[table]
+[tr][th]Property[/th][th]Type[/th][th]Default[/th][th]Description[/th][/tr]
+[tr][td]name[/td][td]string[/td][td][/td][td]Tooltip text shown on hover.[/td][/tr]
+[tr][td]url[/td][td]string[/td][td][/td][td]URL opened in the player's browser when clicked.[/td][/tr]
+[tr][td]iconUrl[/td][td]string[/td][td][/td][td]URL to the button's icon image.[/td][/tr]
+[tr][td]height[/td][td]float[/td][td]60[/td][td]Button height in pixels.[/td][/tr]
+[tr][td]aspect[/td][td]float[/td][td]2.5[/td][td]Width-to-height ratio (width = height * aspect).[/td][/tr]
+[tr][td]corner[/td][td]float[/td][td]8[/td][td]Border radius in pixels.[/td][/tr]
+[tr][td]marginRight[/td][td]float[/td][td]12[/td][td]Space to the right of the button in pixels.[/td][/tr]
+[tr][td]pad[/td][td]float[/td][td]0[/td][td]Internal padding around the icon.[/td][/tr]
+[tr][td]choke[/td][td]float[/td][td]0[/td][td]Inset margin on the icon image so corners clip cleanly with rounded buttons.[/td][/tr]
+[tr][td]background[/td][td]string[/td][td]transparent[/td][td]Button background color (hex, e.g. "#5865F2").[/td][/tr]
+[tr][td]backgroundHover[/td][td]string[/td][td]transparent[/td][td]Background color on hover.[/td][/tr]
+[tr][td]backgroundActive[/td][td]string[/td][td]transparent[/td][td]Background color when pressed.[/td][/tr]
+[/table]
+
+[h3]Theme Properties[/h3]
+
+All values are hex color strings. Supports [b]#RRGGBB[/b] and [b]#AARRGGBB[/b] formats. If omitted, a dark theme is used by default.
+
+[table]
+[tr][th]Property[/th][th]Description[/th][/tr]
+[tr][td]overlay[/td][td]Dim layer behind the panel (use alpha for transparency, e.g. "#8C000000").[/td][/tr]
+[tr][td]panel[/td][td]Panel background color.[/td][/tr]
+[tr][td]text[/td][td]Default text color.[/td][/tr]
+[tr][td]mutedText[/td][td]Secondary/muted text color.[/td][/tr]
+[tr][td]button[/td][td]Close button background.[/td][/tr]
+[tr][td]buttonHover[/td][td]Close button hover color.[/td][/tr]
+[tr][td]buttonActive[/td][td]Close button pressed color.[/td][/tr]
+[tr][td]toggleBox[/td][td]Checkbox background color.[/td][/tr]
+[tr][td]toggleCheck[/td][td]Checkbox checkmark color.[/td][/tr]
+[tr][td]scrollbarTrack[/td][td]Scrollbar track color.[/td][/tr]
+[tr][td]scrollbarThumb[/td][td]Scrollbar thumb color.[/td][/tr]
+[/table]
+
+[h2]Full Example[/h2]
+
+[code]
+{
+  "version": 1,
+  "modalDoc": {
+    "title": "<size=44><color=#FFD966>Welcome to <b>My Server</b></color></size><br><size=20>Season 3</size>",
+    "richText": "<b>Welcome!</b><br/><br/>• Rule 1: Be cool.<br/>• Rule 2: Don't be not cool.<br/>• Rule 3: Have fun!<br/>",
+    "bannerImageUrl": "https://i.imgur.com/example.png",
+    "panelImageUrl": "https://i.imgur.com/background.png",
+    "panelWidthPercent": 60,
+    "panelHeightPercent": 50,
+    "closeDelaySeconds": 5,
+    "blockEscDuringDelay": true,
+    "blockClickOutsideDuringDelay": true,
+    "buttons": [
+      {
+        "name": "Discord",
+        "url": "https://discord.gg/your-invite",
+        "iconUrl": "https://i.imgur.com/your-discord-icon.png",
+        "height": 40,
+        "aspect": 2,
+        "corner": 8,
+        "marginRight": 8,
+        "pad": 0,
+        "choke": 5,
+        "background": "",
+        "backgroundActive": "",
+        "backgroundHover": ""
+      }
+    ]
+  },
+  "theme": {
+    "overlay": "#8C000000",
+    "panel": "#1A1A1F",
+    "text": "#FFFFFF",
+    "mutedText": "#C7C7CC",
+    "button": "#383A3D",
+    "buttonHover": "#474A4F",
+    "buttonActive": "#2E3033",
+    "toggleBox": "#616469",
+    "toggleCheck": "#FFFFFF",
+    "scrollbarTrack": "#1F2023",
+    "scrollbarThumb": "#4D5157"
+  }
+}
+[/code]

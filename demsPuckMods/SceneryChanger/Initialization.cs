@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 using UnityEngine;
 namespace SceneryChanger
 {
-    public class Initialization : IPuckMod
+    public class Initialization : IPuckPlugin
     {
         static readonly Harmony harmony = new Harmony("GAFURIX.SceneryChanger");
 
