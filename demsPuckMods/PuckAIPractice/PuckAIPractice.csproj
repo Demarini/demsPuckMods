@@ -52,6 +52,10 @@
     <Compile Include="AI\GoalieAI.cs" />
     <Compile Include="AI\GoalieSettings.cs" />
     <Compile Include="Config\ModConfig.cs" />
+    <Compile Include="Defender\DefenderAI.cs" />
+    <Compile Include="Defender\DefenderCommandPatch.cs" />
+    <Compile Include="Defender\DefenderRegistry.cs" />
+    <Compile Include="Defender\DefenderSpawner.cs" />
     <Compile Include="GameModes\GoalieRunner.cs" />
     <Compile Include="GameModes\Goalies.cs" />
     <Compile Include="Patches\BotInputPatch.cs" />
