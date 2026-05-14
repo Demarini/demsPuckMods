@@ -71,6 +71,10 @@
     <Compile Include="Patches\VotingPatch.cs" />
     <Compile Include="Patches\ReplayRecorderPatch.cs" />
     <Compile Include="Patches\CharacterSpawnPatch.cs" />
+    <Compile Include="Scenarios\IScenario.cs" />
+    <Compile Include="Scenarios\ScenarioManager.cs" />
+    <Compile Include="Scenarios\ScenarioCommandPatch.cs" />
+    <Compile Include="Scenarios\RushScenario.cs" />
     <Compile Include="Singletons\ConfigData.cs" />
     <Compile Include="Utilities\BotSpawning.cs" />
     <Compile Include="Utilities\DetectPositions.cs" />

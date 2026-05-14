@@ -128,9 +128,69 @@ namespace PuckAIPractice.Defender
         // within this of the target direction, the slide ends.
         public float ChaseSlideReleaseAngle = 20f;
 
+        [Header("Chase Lead Pursuit")]
+        // Aim at where the target WILL be, not where they are. Without this the
+        // bot whiffs even on slow lateral motion (just heads to the spot the
+        // target was at). Same math as ChaserAI — predicted velocity blends raw
+        // velocity with facing direction so the bot reacts to body rotation
+        // before momentum catches up; lead time scales with distance; lead
+        // magnitude is capped so the aim never lands "behind" the bot when
+        // target is closing head-on (the 180° phantom-pivot bug).
+        public float ChaseMaxLeadTime = 1.2f;
+        // distance / this = leadTime, up to ChaseMaxLeadTime. Smaller = more
+        // lead per meter of separation.
+        public float ChaseLeadDistanceScale = 5f;
+        // Inside this radius the lead fades to zero — bot commits to the
+        // player's body instead of an anticipated point. The physical advantage
+        // (and the cut-slide) handles cuts at close range.
+        public float ChaseCommitDistance = 3.5f;
+        // Lead vector magnitude is capped at (dist × this). Critical: prevents
+        // the aim point from flying past the bot when the target is closing
+        // head-on, which would otherwise make the bot pivot 180° to face a
+        // phantom point.
+        public float ChaseMaxLeadAsDistRatio = 0.5f;
+        // 0 = pure velocity (lags player turns), 1 = pure facing (reacts to
+        // body rotation instantly). Mid values blend.
+        [Range(0f, 1f)] public float ChaseFacingBias = 0.6f;
+
+        [Header("Zone Facing Expansion")]
+        // The pursuit zone radius grows when the bot is facing away from the
+        // target so chase triggers earlier and the bot has runway to complete a
+        // turnaround before the attacker is past. Linear: 0° → +0, 180° → +this.
+        // Applied to BOTH entry and exit thresholds so Exit - Entry remains
+        // exactly ZoneReturnHysteresis — no flip-flop at the boundary.
+        public float ZoneFacingExpansion = 10f;
+
+        [Header("Chase Pivot")]
+        // When chase engages with the bot facing more than PivotEngageAngle away
+        // from the target, the bot enters a pivot phase: SlideInput held
+        // continuously, full turn input toward the target (shortest path via
+        // SignedAngle), no forward thrust, no sprint. Held crouch + turn
+        // rotates ~180° in ~1s. Normal chase resumes once we're within
+        // PivotReleaseAngle of the target bearing.
+        public float PivotEngageAngle = 90f;
+        public float PivotReleaseAngle = 25f;
+        // Safety cap on pivot duration — releases regardless of alignment.
+        // Generous vs the observed ~1s for a 180° turn under held crouch.
+        public float PivotMaxDuration = 1.8f;
+
         [Header("Stick Aim")]
         public float StickAimForwardExtension = 0.3f;
         public float StickMaxAimDistance = 1.8f;
+        // Skip active stick aiming when the puck is farther than this from the
+        // bot — neutral angle is written instead. Prevents the stick PID from
+        // tracking a far-away puck while the bot rotates (orbit / cut-slide /
+        // chase turns), which manifests as wild visible swinging. The bot's
+        // physical stick reach is ~2.5m, so beyond ~3m there's no benefit to
+        // active aiming anyway.
+        public float StickPuckEngageDistance = 8f;
+        // Puck must be within this angle of the bot's forward direction to
+        // engage active aim. When the puck is behind the bot, the stick yaw
+        // math points behind the body — the game clamps it to a reachable
+        // range, but the PID then oscillates against that clamp as the bot
+        // rotates, looking like the stick is "whipping around" trying to chase
+        // an unreachable position. 90° = forward hemisphere only.
+        public float StickEngageMaxAngle = 90f;
 
         private enum State { Patrolling, Chasing }
         private State state = State.Patrolling;
@@ -141,6 +201,12 @@ namespace PuckAIPractice.Defender
         private bool circleHoldingForward;     // hysteresis latch for orbit speed
         private float patrolPulseTime;          // accumulator for crouch pulse phase
         private GameObject debugMarker;
+        // Two flat cylinders lying on the ice, forming a `+` cross centered on
+        // HomePosition. Each spans the diameter (2 × current pursuit radius)
+        // along world X and Z respectively. The cross grows and shrinks as the
+        // bot's angle-to-target changes the expanded radius.
+        private GameObject debugRadiusLineX;
+        private GameObject debugRadiusLineZ;
         private Vector3 currentShift;
 
         // Cut-detection state. EMAs of the target's planar velocity are updated
@@ -155,6 +221,22 @@ namespace PuckAIPractice.Defender
         private float chaseSlideStartTime = -1000f;
         private float lastChaseSlideEndTime = -1000f;
 
+        // Pivot phase state. Engaged at chase entry when the bot is far enough
+        // turned away that normal chase steering would lose too much time.
+        // Holds SlideInput continuously (NOT a brief burst like the chase-slide)
+        // plus a hard turn input toward the target. Mutually exclusive with the
+        // chase-slide — pivot is the chase-entry response, chase-slide is the
+        // mid-chase response to target cuts.
+        private bool isPivoting;
+        private float pivotStartTime = -1000f;
+
+        // Facing-expansion latched at chase entry. The exit threshold uses
+        // this snapshot instead of the live (shrinking-as-bot-pivots) value,
+        // so chase doesn't drop mid-pivot when the bot's facing angle decreases
+        // and pulls the dynamic radius in below the target's current distance.
+        // Reset to 0 by the chase-end transition.
+        private float entryFacingExpansion;
+
         void Start()
         {
             // Initialize the dynamic home to the static anchor so the first frame's
@@ -164,12 +246,15 @@ namespace PuckAIPractice.Defender
             if (ShowDebugMarker)
             {
                 CreateDebugMarker();
+                CreateDebugRadiusLines();
             }
         }
 
         void OnDestroy()
         {
             if (debugMarker != null) Destroy(debugMarker);
+            if (debugRadiusLineX != null) Destroy(debugRadiusLineX);
+            if (debugRadiusLineZ != null) Destroy(debugRadiusLineZ);
         }
 
         private void CreateDebugMarker()
@@ -185,10 +270,71 @@ namespace PuckAIPractice.Defender
             if (renderer != null) renderer.material.color = DebugMarkerColor;
         }
 
+        // Two flat cylinders laid on the ice forming a `+` cross centered on
+        // HomePosition. Each cylinder's long axis spans 2×radius (the
+        // diameter of the pursuit zone). Sized via localScale every frame in
+        // UpdateDebugRadiusLines so the cross visibly expands and shrinks
+        // with the dynamic radius.
+        //
+        // Cylinder default: 2 units tall along local Y, radius 0.5 in X/Z.
+        // To make the cylinder lie flat along world X, rotate 90° around Z
+        // (local +Y → world ±X). For world Z, rotate 90° around X.
+        private void CreateDebugRadiusLines()
+        {
+            string botName = ControlledPlayer != null ? ControlledPlayer.Username.Value.ToString() : "unknown";
+
+            debugRadiusLineX = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            debugRadiusLineX.name = $"DefenderRadiusLineX_{botName}";
+            var colX = debugRadiusLineX.GetComponent<Collider>();
+            if (colX != null) Destroy(colX);
+            debugRadiusLineX.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
+            var rendX = debugRadiusLineX.GetComponent<Renderer>();
+            if (rendX != null) rendX.material.color = DebugMarkerColor;
+
+            debugRadiusLineZ = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            debugRadiusLineZ.name = $"DefenderRadiusLineZ_{botName}";
+            var colZ = debugRadiusLineZ.GetComponent<Collider>();
+            if (colZ != null) Destroy(colZ);
+            debugRadiusLineZ.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            var rendZ = debugRadiusLineZ.GetComponent<Renderer>();
+            if (rendZ != null) rendZ.material.color = DebugMarkerColor;
+        }
+
         private void UpdateDebugMarkerPosition()
         {
             if (debugMarker == null) return;
             debugMarker.transform.position = HomePosition + Vector3.up * 2f;
+        }
+
+        // Re-position and re-scale the flat cross lines so each spans the
+        // current pursuit diameter. localScale.y = radius (the cylinder is
+        // 2 units long along its local Y by default, so 2 × radius = diameter
+        // after scaling). The thin axes (0.15) give a 0.3-wide cross-section.
+        private void UpdateDebugRadiusLines(Player target)
+        {
+            if (debugRadiusLineX == null && debugRadiusLineZ == null) return;
+            // During patrol the cross tracks the dynamic entry threshold (grows
+            // as the bot turns away from target). During chase the entry value
+            // is latched, so the cross freezes — confirming visually that the
+            // exit threshold is stable for the duration of the pursuit, not
+            // shrinking inward as the bot pivots.
+            float radius = (state == State.Chasing)
+                ? ZoneRadius + entryFacingExpansion
+                : ComputeExpandedZoneRadius(target);
+            // Tiny Y bump so the line sits just above the ice surface, not z-fighting.
+            Vector3 pos = HomePosition + Vector3.up * 0.1f;
+            Vector3 lineScale = new Vector3(0.15f, radius, 0.15f);
+
+            if (debugRadiusLineX != null)
+            {
+                debugRadiusLineX.transform.position = pos;
+                debugRadiusLineX.transform.localScale = lineScale;
+            }
+            if (debugRadiusLineZ != null)
+            {
+                debugRadiusLineZ.transform.position = pos;
+                debugRadiusLineZ.transform.localScale = lineScale;
+            }
         }
 
         // Slide HomePosition laterally toward the target player so the defensive
@@ -226,6 +372,7 @@ namespace PuckAIPractice.Defender
             // before any patrol/chase/zone logic reads HomePosition.
             UpdateZoneShift(target);
             UpdateDebugMarkerPosition();
+            UpdateDebugRadiusLines(target);
 
             // Track target velocity continuously so cut detection has warm data
             // the moment chase mode engages. Dual EMAs at the same rates as
@@ -241,6 +388,13 @@ namespace PuckAIPractice.Defender
             if (state == State.Patrolling && ShouldChase(target))
             {
                 state = State.Chasing;
+                // Latch the entry expansion so the exit threshold stays
+                // stable for the whole chase, even as the bot pivots inward
+                // (which shrinks the live expansion). Without this, the exit
+                // would drop below the target's distance mid-pivot and the
+                // bot would oscillate between chase and patrol.
+                entryFacingExpansion = ComputeFacingExpansion(target);
+
                 if (isPatrolSliding)
                 {
                     isPatrolSliding = false;
@@ -251,10 +405,23 @@ namespace PuckAIPractice.Defender
                     isBraking = false;
                     input.StopInput.ServerValue = false;
                 }
+
+                // Engage pivot phase if we're significantly turned away. The
+                // expanded zone radius (see ShouldChase) bought us the runway;
+                // now we spend it on a held-crouch full turn toward the target.
+                float entryAbsAngle = ComputeAbsAngleToTarget(body.transform.position, body.transform.forward, target);
+                if (entryAbsAngle > PivotEngageAngle)
+                {
+                    isPivoting = true;
+                    pivotStartTime = Time.time;
+                    input.SlideInput.ServerValue = true;
+                }
             }
             else if (state == State.Chasing && ShouldReturnToPatrol(target))
             {
                 state = State.Patrolling;
+                // Clear the latch so the next chase entry starts fresh.
+                entryFacingExpansion = 0f;
                 if (isSprinting)
                 {
                     isSprinting = false;
@@ -266,6 +433,12 @@ namespace PuckAIPractice.Defender
                 {
                     isChaseSliding = false;
                     lastChaseSlideEndTime = Time.time;
+                    input.SlideInput.ServerValue = false;
+                }
+                // Release pivot if target left the zone mid-turnaround.
+                if (isPivoting)
+                {
+                    isPivoting = false;
                     input.SlideInput.ServerValue = false;
                 }
             }
@@ -289,14 +462,55 @@ namespace PuckAIPractice.Defender
         {
             if (target == null || target.PlayerBody == null) return false;
             float distFromHome = Vector3.Distance(target.PlayerBody.transform.position, HomePosition);
-            return distFromHome < ZoneRadius;
+            return distFromHome < ComputeExpandedZoneRadius(target);
         }
 
         private bool ShouldReturnToPatrol(Player target)
         {
             if (target == null || target.PlayerBody == null) return true;
             float distFromHome = Vector3.Distance(target.PlayerBody.transform.position, HomePosition);
-            return distFromHome > (ZoneRadius + ZoneReturnHysteresis);
+            // Use the LATCHED expansion captured at chase entry, not the
+            // live value. The live value shrinks as the bot pivots inward,
+            // which would otherwise drag the exit threshold down with it and
+            // drop chase mid-pivot — the back-and-forth bug. The latch keeps
+            // the exit boundary stable for the duration of the chase.
+            return distFromHome > (ZoneRadius + entryFacingExpansion + ZoneReturnHysteresis);
+        }
+
+        // Pursuit radius expanded by how turned-away the bot is from the
+        // target. Linear: 0° → ZoneRadius, 180° → ZoneRadius + ZoneFacingExpansion.
+        // The expansion gives a back-turned bot enough lead time to complete a
+        // pivot (~1s for 180° under held crouch) before the attacker has run
+        // through the zone. Used for the entry trigger only — exit uses the
+        // latched entryFacingExpansion (see ShouldReturnToPatrol).
+        private float ComputeExpandedZoneRadius(Player target)
+        {
+            return ZoneRadius + ComputeFacingExpansion(target);
+        }
+
+        // Just the expansion magnitude (without the base ZoneRadius). Used by
+        // ComputeExpandedZoneRadius and by the state transition latching code.
+        private float ComputeFacingExpansion(Player target)
+        {
+            if (ControlledPlayer == null || ControlledPlayer.PlayerBody == null) return 0f;
+            float absAngle = ComputeAbsAngleToTarget(
+                ControlledPlayer.PlayerBody.transform.position,
+                ControlledPlayer.PlayerBody.transform.forward,
+                target);
+            return ZoneFacingExpansion * (absAngle / 180f);
+        }
+
+        // Planar angle (deg) from the bot's forward to the bot→target vector.
+        // Always positive (0–180). Returns 0 for degenerate inputs.
+        private static float ComputeAbsAngleToTarget(Vector3 botPos, Vector3 botForward, Player target)
+        {
+            if (target == null || target.PlayerBody == null) return 0f;
+            Vector3 toTarget = target.PlayerBody.transform.position - botPos;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude < 0.0001f) return 0f;
+            botForward.y = 0f;
+            if (botForward.sqrMagnitude < 0.0001f) return 0f;
+            return Mathf.Abs(Vector3.SignedAngle(botForward, toTarget, Vector3.up));
         }
 
         // Patrol has three sub-modes based on distance to home:
@@ -507,7 +721,61 @@ namespace PuckAIPractice.Defender
                     lastChaseSlideEndTime = Time.time;
                     input.SlideInput.ServerValue = false;
                 }
+                if (isPivoting)
+                {
+                    isPivoting = false;
+                    input.SlideInput.ServerValue = false;
+                }
                 return;
+            }
+
+            // Lead pursuit: aim at where the target WILL be along its predicted
+            // velocity (velocity blended with facing direction). At close range
+            // the lead fades to zero so the bot commits to the body. The aim
+            // magnitude is capped so it never flies past the bot when the
+            // target is closing head-on.
+            Vector3 predictedVel = ComputeChasePredictedTargetVel(target.PlayerBody);
+            Vector3 leadVec = ComputeChaseLeadVec(predictedVel, dist);
+            Vector3 toAim = (targetPos + leadVec) - botPos;
+            toAim.y = 0f;
+            // Degenerate aim — rare (aim point at bot's position); fall back to
+            // raw target direction so the bot still has something to chase.
+            if (toAim.sqrMagnitude < 0.01f) toAim = toTarget;
+
+            // Bearing to the aim point (NOT raw target). Pivot and chase-slide
+            // both release relative to the aim, matching ChaserAI — we want the
+            // bot facing where it's about to skate to, not where the target was.
+            Vector3 forwardDir = body.transform.forward;
+            forwardDir.y = 0f;
+            float signedAngle = Vector3.SignedAngle(forwardDir, toAim, Vector3.up);
+            float absAngle = Mathf.Abs(signedAngle);
+
+            // Pivot phase: held crouch + hard turn, no forward, no sprint.
+            // Sign of signedAngle naturally picks the shortest-path turn
+            // direction. When released, fall through to normal chase logic in
+            // the same frame so SlideInput=false sticks before any cut-slide
+            // might re-set it.
+            if (isPivoting)
+            {
+                bool aligned = absAngle < PivotReleaseAngle;
+                bool durationCap = (Time.time - pivotStartTime) > PivotMaxDuration;
+                if (aligned || durationCap)
+                {
+                    isPivoting = false;
+                    input.SlideInput.ServerValue = false;
+                    // fall through to normal chase below
+                }
+                else
+                {
+                    float pivotTurn = Mathf.Clamp(signedAngle / ChaseTurnFullInputAngle, -1f, 1f);
+                    if (isSprinting)
+                    {
+                        isSprinting = false;
+                        input.SprintInput.ServerValue = false;
+                    }
+                    input.MoveInput.ServerValue = new Vector2(pivotTurn, 0f);
+                    return;
+                }
             }
 
             // Detect a hard direction change on the target before writing inputs,
@@ -515,17 +783,10 @@ namespace PuckAIPractice.Defender
             bool cutDetected = DetectChaseCut();
 
             WriteMoveInput(
-                input, body, toTarget, dist,
+                input, body, toAim, dist,
                 ChaseTurnDeadzoneDeg, ChaseTurnFullInputAngle,
                 ChaseForwardFullAngle, ChaseForwardCutoffAngle,
                 throttleStartDist: 0f, throttleMinForward: 1f);
-
-            // Recompute the bot→target signed angle so UpdateChaseSlide can
-            // release the slide once the bot has re-aligned with the target.
-            Vector3 forwardDir = body.transform.forward;
-            forwardDir.y = 0f;
-            float signedAngle = Vector3.SignedAngle(forwardDir, toTarget, Vector3.up);
-            float absAngle = Mathf.Abs(signedAngle);
 
             UpdateChaseSlide(input, absAngle, cutDetected);
 
@@ -547,6 +808,47 @@ namespace PuckAIPractice.Defender
                     input.SprintInput.ServerValue = true;
                 }
             }
+        }
+
+        // Predicted velocity = current velocity (magnitude only) rotated toward
+        // the target body's facing direction. Catches the case where the player
+        // has rotated their body (about to skate that way) but momentum hasn't
+        // yet caught up — without this, the bot only reacts after the velocity
+        // shift, several frames late.
+        private Vector3 ComputeChasePredictedTargetVel(PlayerBody targetBody)
+        {
+            Vector3 facingDir = targetBody.transform.forward;
+            facingDir.y = 0f;
+            if (facingDir.sqrMagnitude < 0.0001f) return recentTargetVel;
+            facingDir.Normalize();
+
+            float speed = recentTargetVel.magnitude;
+            if (speed < 0.1f) return Vector3.zero;
+
+            Vector3 velDir = recentTargetVel / speed;
+            Vector3 blendedDir = Vector3.Slerp(velDir, facingDir, ChaseFacingBias);
+            return blendedDir * speed;
+        }
+
+        // Lead vector for the aim point. leadTime scales with distance and is
+        // faded to zero inside ChaseCommitDistance (commit to the body). The
+        // final magnitude is capped at dist × ChaseMaxLeadAsDistRatio so the
+        // aim never ends up "behind" the bot when the target is closing
+        // head-on (which would otherwise cause a 180° phantom-pivot).
+        private Vector3 ComputeChaseLeadVec(Vector3 predictedVel, float dist)
+        {
+            float leadTime = Mathf.Clamp(dist / ChaseLeadDistanceScale, 0f, ChaseMaxLeadTime);
+            if (dist < ChaseCommitDistance)
+            {
+                leadTime *= Mathf.InverseLerp(0f, ChaseCommitDistance, dist);
+            }
+            Vector3 leadVec = predictedVel * leadTime;
+            float maxMag = dist * ChaseMaxLeadAsDistRatio;
+            if (leadVec.sqrMagnitude > maxMag * maxMag)
+            {
+                return leadVec.normalized * maxMag;
+            }
+            return leadVec;
         }
 
         // Fires once when the target's recent velocity direction has diverged
@@ -629,21 +931,55 @@ namespace PuckAIPractice.Defender
         }
 
         // See CHASER_HANDOFF.md §9 for the stick-aim inverse math.
+        //
+        // Defender-specific: gated on bot-to-puck distance. The closest-to-
+        // target puck can be anywhere on the rink, and while the bot is
+        // patrolling/orbiting it would otherwise spin the stick to chase a
+        // distant point as the bot rotates. Outside StickPuckEngageDistance we
+        // write a neutral angle so the stick rests in its default position.
         private void AimStickAtPuck(PlayerInput input, Vector3 targetPos)
         {
             var positioner = ControlledPlayer.StickPositioner;
             if (positioner == null) return;
 
             var puck = PickFocusPuck(targetPos);
-            if (puck == null) return;
+            if (puck == null)
+            {
+                input.StickRaycastOriginAngleInput.ServerValue = Vector2.zero;
+                return;
+            }
 
-            Vector3 originPos = positioner.RaycastOriginPosition;
-            Vector3 puckPos = puck.transform.position;
             Vector3 botPos = ControlledPlayer.PlayerBody.transform.position;
-
+            Vector3 puckPos = puck.transform.position;
             Vector3 horizToPuck = puckPos - botPos;
             horizToPuck.y = 0f;
             float horizDist = horizToPuck.magnitude;
+
+            // Out of engage range — neutral aim. The bot's stick rests at its
+            // default pose instead of tracking a remote puck.
+            if (horizDist > StickPuckEngageDistance)
+            {
+                input.StickRaycastOriginAngleInput.ServerValue = Vector2.zero;
+                return;
+            }
+
+            // Forward-hemisphere gate. If the puck is behind the bot, the
+            // computed yaw points backward, the game clamps it, and the PID
+            // oscillates against the clamp. Vector3.Angle returns 0–180 so the
+            // hemisphere check is just a single threshold.
+            Vector3 botForward = ControlledPlayer.PlayerBody.transform.forward;
+            botForward.y = 0f;
+            if (botForward.sqrMagnitude > 0.0001f && horizDist > 0.0001f)
+            {
+                float angleToPuck = Vector3.Angle(botForward, horizToPuck);
+                if (angleToPuck > StickEngageMaxAngle)
+                {
+                    input.StickRaycastOriginAngleInput.ServerValue = Vector2.zero;
+                    return;
+                }
+            }
+
+            Vector3 originPos = positioner.RaycastOriginPosition;
             Vector3 horizDir = horizDist > 0.0001f
                 ? horizToPuck / horizDist
                 : ControlledPlayer.PlayerBody.transform.forward;

@@ -79,7 +79,7 @@ namespace PuckAIPractice.Defender
             {
                 case "LD":
                 case "RD":
-                    ai.HomePullBackDistance = 20f;
+                    ai.HomePullBackDistance = 18f;
                     ai.HomeTuckInDistance = 4f;
                     ai.ZoneRadius = 25f;
                     break;
@@ -92,7 +92,7 @@ namespace PuckAIPractice.Defender
                 case "C":
                     ai.HomePullBackDistance = 15f;
                     ai.HomeTuckInDistance = 0f;
-                    ai.ZoneRadius = 16f;
+                    ai.ZoneRadius = 17f;
                     break;
             }
 

@@ -8,6 +8,20 @@
 1. `ZoneRadius` is now per-position. LD/RD bumped to **20m** so the corner defenders are already engaging when the attacker reaches the C's zone — no more "beat the forward, then face the D one at a time." LW/RW/C kept at 16m.
 2. Chase now has **cut detection + a chase-slide burst** ported from `ChaserAI`. A hard direction change on the target triggers a brief slide so the bot pivots tightly to follow. Distinct from the patrol pulse-crouch (`isPatrolSliding`) — separate state, separate fields. Sprint is suppressed while the chase slide is active.
 
+**Latest (2026-05-14, fifth pass):** Latched the entry expansion to prevent chase-drop mid-pivot.
+
+The bug: a back-turned defender's chase trigger is the expanded zone (e.g. `ZoneRadius + 6m` at 180°). Player enters at that distance, chase starts, bot begins to pivot. As the bot's facing rotates toward the player, the **live** expansion shrinks → exit threshold shrinks → exit fires while the player is still well inside the original entry boundary. Patrol resumes, orbit turns the bot off-axis again, player re-enters, oscillation kills the pivot momentum. The whole point of the expansion (jump on a back-turned threat) is defeated.
+
+The fix: at chase entry, latch `entryFacingExpansion = ComputeFacingExpansion(target)`. `ShouldReturnToPatrol` now uses `ZoneRadius + entryFacingExpansion + ZoneReturnHysteresis` — the locked entry expansion, not the live one. `ShouldChase` still uses the live value (it's only consulted in patrol). The latch resets to 0 when chase ends. The debug cross also shows the latched value during chase so the visualization matches reality — you'll see the cross freeze the moment chase starts and stay frozen until it ends.
+
+**Latest (2026-05-14, fourth pass):** Two playtest-driven follow-ups.
+1. **Lead pursuit in chase.** Ported the chaser's lead-aim math: predicted velocity blends raw velocity with facing direction (`ChaseFacingBias = 0.6`), lead time scales with distance up to `ChaseMaxLeadTime = 1.2s`, lead fades to zero inside `ChaseCommitDistance = 3.5m`, and magnitude is capped at `dist × ChaseMaxLeadAsDistRatio (0.5)` to prevent the 180° phantom-pivot bug. Before this, slow lateral motion (~5 mph glide) would let the player drift around the bot because the bot was always heading to the spot the player was *just* at; now the bot meets them at the predicted intercept. Pivot release and chase-slide release both reference the aim point (not raw target), matching `ChaserAI`'s convention.
+2. **Stick aim gated on bot-to-puck distance AND on forward hemisphere.** When the puck is farther than `StickPuckEngageDistance (3m)` from the bot, OR more than `StickEngageMaxAngle (90°)` off the bot's forward (i.e., behind the bot), neutral angle (`Vector2.zero`) is written instead of actively tracking. The distance gate eliminates the long-range PID chase while the bot rotates in orbit. The angle gate eliminates the "stick whipping around" case where the puck is behind the bot: the yaw math points backward, the game clamps it to a reachable range, and the PID then oscillates against that clamp as the bot rotates. `StickMaxAimDistance` also bumped to 5m (was 1.8m) — the lower value locked the aim at the cap until the puck was inside it, producing a sudden snap as the bot closed; 5m lets the aim track the puck gradually from farther out (smoother transition; minor trade is the blade hovers slightly above the ice when the puck is well past max physical reach).
+
+**Latest (2026-05-14, third pass):** Solved the "back turned at chase entry" problem.
+1. **Facing-based zone expansion.** The effective `ZoneRadius` now grows with how turned-away the bot is from the target. Linear: 0° → ZoneRadius, 180° → ZoneRadius + `ZoneFacingExpansion` (default 6m). Applied to BOTH entry and exit thresholds so the gap stays exactly `ZoneReturnHysteresis` (4m) — no flip-flop. Effect: a back-turned bot starts chasing the attacker ~6m earlier so the turnaround has runway.
+2. **Pivot phase at chase entry.** If the bot is facing more than `PivotEngageAngle` (90°) away from the target at chase entry, it enters a pivot phase: `SlideInput` held continuously, full turn input toward the target (shortest-path via `SignedAngle`), no forward thrust, no sprint. Released when within `PivotReleaseAngle` (25°) of the target bearing OR `PivotMaxDuration` (1.8s safety cap) elapses. Held crouch + turn rotates ~180° in ~1s. Falls through to normal chase the same frame it releases.
+
 Branch: `tm/defenderBot`. Built and deployed locally; not pushed.
 
 Paired with `CHASER_HANDOFF.md` (the constant-pursuit bot). Chaser and Defender can coexist on the ice — separate registries, separate clientId ranges.
@@ -67,11 +81,20 @@ The AI is a two-state machine (Patrolling ↔ Chasing) with three sub-phases und
 ### State transitions (zone-based)
 
 ```
-Patrol → Chase:  target inside ZoneRadius of dynamic HomePosition
-Chase  → Patrol: target beyond ZoneRadius + ZoneReturnHysteresis (4m) of dynamic HomePosition
+liveExpansion  = ZoneFacingExpansion * (absAngleToTarget / 180)
+Patrol → Chase: target inside (ZoneRadius + liveExpansion)
+                + latch entryFacingExpansion := liveExpansion
+Chase  → Patrol: target beyond (ZoneRadius + entryFacingExpansion + ZoneReturnHysteresis)
+                + clear entryFacingExpansion
 ```
 
 `ZoneRadius` is per-position (LD/RD = 20m, LW/RW/C = 16m — see "Per-position defaults"). The "dynamic HomePosition" matters — see Zone Shifting below.
+
+`absAngleToTarget` is the planar angle (0–180°) between the bot's `transform.forward` and the bot→target vector. The **entry** trigger uses the live value (cross grows as bot turns away from target during patrol). The **exit** trigger uses the value LATCHED at chase entry — see "Latched entry expansion" below for why.
+
+### Latched entry expansion
+
+Without the latch, the exit threshold would shrink as the bot pivots inward (because `liveExpansion` depends on the bot's facing, which is changing). A back-turned defender would commit to chase, start pivoting, and then drop chase mid-pivot when the shrinking radius pulled below the target's current distance — defeating the whole point of the expansion. The latch holds the entry expansion fixed for the duration of the chase so the boundary is stable until the player actually leaves. Reset to 0 on chase exit.
 
 **Velocity-direction check was deliberately removed.** First-pass attempted "trigger chase when target is close AND moving toward bot." That made pursuit unpredictable and missed obvious threats (stationary attackers next to the zone, attackers cutting laterally inside the zone). Pure distance-from-zone-center is the trigger now.
 
@@ -121,9 +144,28 @@ The aim point sits on the desired circle, slightly ahead of the bot's current an
 
 ### Chase
 
-Straight-line "go toward target" — turn + forward + sprint. Still simpler than `ChaserAI` (no lead point, no Mirror/Predict modes), but **does now react to cuts**:
+Lead-pursuit + reactive cuts. Now closer to `ChaserAI` (lacks only Mirror/Predict engagement modes — the random per-bot side commit). Aims at a predicted intercept point (`targetPos + leadVec`), not the target's current position. Pivot release and chase-slide release both reference this aim point, matching the chaser convention — we want the bot facing where it's about to skate to.
 
-- Velocity EMAs (`recentTargetVel` at ~67ms time constant, `oldTargetVel` at ~330ms) run continuously regardless of state, so the data is warm the moment chase engages.
+`leadVec = ClampLead(predictedTargetVel × leadTime, dist)` where:
+- `predictedTargetVel = Slerp(velocityDir, facingDir, ChaseFacingBias) × |velocity|`
+- `leadTime = clamp(dist / ChaseLeadDistanceScale, 0, ChaseMaxLeadTime)`, faded to zero inside `ChaseCommitDistance`
+- `ClampLead` caps magnitude at `dist × ChaseMaxLeadAsDistRatio` so the aim never lands past the bot when the target is closing head-on
+
+Two reactive layers also run on top of the lead pursuit:
+
+**Pivot phase** runs first at chase entry when the bot is significantly turned away (entry `absAngle > PivotEngageAngle`, default 90°). While pivoting:
+
+- `SlideInput = true` continuously (NOT pulsed — this is a full crouch hold)
+- `MoveInput = (turnInput, 0)` — full turn toward the target, NO forward thrust. Sliding forward into a turn fights the rotation; we just want to spin in place.
+- `SprintInput = false` — sprint during a crouch hold is wasted and would also conflict.
+- Sign of `signedAngle` from `Vector3.SignedAngle` naturally picks the shortest-path turn direction.
+- Release on `absAngle < PivotReleaseAngle` (default 25°) OR `PivotMaxDuration` (default 1.8s) elapsed. Then falls through to normal chase logic in the same frame.
+
+The expanded entry `ZoneRadius` (see "State transitions") is what buys the pivot phase its runway — without that expansion, the attacker would already be past by the time the turnaround finished.
+
+**Cut reaction** then takes over once we're aligned:
+
+- Velocity EMAs (`recentTargetVel` at ~67ms time constant, `oldTargetVel` at ~330ms) run continuously regardless of state, so the data is warm the moment chase (or pivot) engages.
 - `DetectChaseCut` fires once when `dot(recentVel, oldVel) < ChaseCutDotThreshold` (with both above `ChaseCutDetectMinSpeed`). Self-cooldowns via `ChaseCutReactionCooldown` so a sustained turn doesn't re-trigger every frame.
 - On a detected cut, `UpdateChaseSlide` starts a slide burst (`SlideInput = true`). Released when either `ChaseSlideMaxDuration (0.35s)` elapses OR the bot's facing has re-aligned with the target inside `ChaseSlideReleaseAngle (20°)`.
 - Cut-triggered slides bypass `ChaseSlideCooldown` — the cut detector's own cooldown is the real rate-limit. The slide cooldown only matters for future non-cut triggers (none today).
@@ -133,7 +175,13 @@ Sprint engages when stamina > 0.4 and `dist > ChaseSprintEngageDistance` (5m); r
 
 ### Stick aim
 
-Identical to `ChaserAI` — see `CHASER_HANDOFF.md` §9 for the full inverse-math explanation. Picks the puck closest to the target player and aims at a point on the ice past the puck along the bot→puck axis, with the aim distance capped so the raycast always lands on the ice.
+Same inverse-math as `ChaserAI` — see `CHASER_HANDOFF.md` §9 for the full explanation. Picks the puck closest to the target player and aims at a point on the ice past the puck along the bot→puck axis, with the aim distance capped so the raycast always lands on the ice.
+
+**Defender-specific gates** (not in `ChaserAI`):
+- **Distance gate**: if the bot is farther than `StickPuckEngageDistance` (3m) from the chosen puck, write neutral angle and skip aim. The chaser doesn't need this because it's always near the player and therefore near the puck; the defender often is not (orbiting at home while play is upice), and without the gate the stick would track a far puck as the bot rotates through orbit.
+- **Forward-hemisphere gate**: if the puck is more than `StickEngageMaxAngle` (90°) off the bot's forward direction (i.e., behind the bot), write neutral angle and skip aim. The yaw math points backward, the game clamps to a body-relative reachable range, and the PID oscillates against that clamp as the bot rotates — looks like the stick is whipping around trying to reach an unreachable position.
+
+`StickMaxAimDistance` was bumped from 1.8m to 5m to make the close-in aim transition gradual instead of snappy. The lower cap held the aim at exactly 1.8m forward at ice level whenever the puck was beyond that, producing a sudden jump when the puck crossed inside. The higher cap lets the aim track the puck position smoothly; the trade is the blade hovers slightly above the ice when the puck is well past max physical stick reach (~2.5m).
 
 ## Per-position defaults
 
@@ -168,6 +216,10 @@ Pull-back and tuck-in were arrived at empirically by visually confirming the deb
 | Patrol Movement | PulseDuration | 0.15s | Crouch held within each window |
 | Zone | ZoneRadius | per-position | Target inside → chase. LD/RD = 20m, others = 16m (set by spawner) |
 | Zone | ZoneReturnHysteresis | 4m | Target outside (radius+this) → return to patrol |
+| Zone Facing Expansion | ZoneFacingExpansion | 6m | Extra zone radius at 180° turned-away. Linear with absAngle; applied to entry AND exit |
+| Chase Pivot | PivotEngageAngle | 90° | Entry absAngle above this triggers a pivot phase |
+| Chase Pivot | PivotReleaseAngle | 25° | Pivot releases when bot is within this of the target bearing |
+| Chase Pivot | PivotMaxDuration | 1.8s | Safety cap — pivot releases after this regardless |
 | Zone Shift | LateralShiftFactor | 0.4 | `shift.x = factor × target.x` |
 | Zone Shift | MaxLateralShift | 5m | Cap on shift magnitude |
 | Zone Shift | ShiftSmoothing | 3 | Lerp rate toward desired shift |
@@ -179,6 +231,11 @@ Pull-back and tuck-in were arrived at empirically by visually confirming the deb
 | Chase Movement | ChaseSprintResumeStamina | 0.4 | Resume sprinting above this |
 | Chase Movement | ChaseSprintEngageDistance | 5m | Min distance to start sprinting |
 | Chase Movement | ChaseSprintReleaseDistance | 3m | Close inside this → drop sprint |
+| Chase Lead Pursuit | ChaseMaxLeadTime | 1.2s | Cap on lead horizon |
+| Chase Lead Pursuit | ChaseLeadDistanceScale | 5 | distance / this = leadTime |
+| Chase Lead Pursuit | ChaseCommitDistance | 3.5m | Lead fades to zero inside this |
+| Chase Lead Pursuit | ChaseMaxLeadAsDistRatio | 0.5 | Lead magnitude cap (anti phantom-pivot) |
+| Chase Lead Pursuit | ChaseFacingBias | 0.6 | 0 = vel only, 1 = facing only |
 | Chase Cut Reaction | ChaseCutDotThreshold | 0.3 | dot(recentVel, oldVel) below this = cut detected |
 | Chase Cut Reaction | ChaseCutDetectMinSpeed | 2 m/s | Ignore cuts when target is barely moving |
 | Chase Cut Reaction | ChaseCutReactionCooldown | 0.5s | Min gap between cut-triggered slides (real rate-limit) |
@@ -186,7 +243,9 @@ Pull-back and tuck-in were arrived at empirically by visually confirming the deb
 | Chase Slide | ChaseSlideCooldown | 1.2s | Min gap after slide end (bypassed by cuts) |
 | Chase Slide | ChaseSlideReleaseAngle | 20° | Release ongoing slide when re-aligned with target |
 | Stick Aim | StickAimForwardExtension | 0.3m | Aim past puck so blade hits side not top |
-| Stick Aim | StickMaxAimDistance | 1.8m | Cap aim distance so blade stays on ice |
+| Stick Aim | StickMaxAimDistance | 5m | Cap aim distance. Higher = smoother transition, hovers slightly above ice beyond stick reach |
+| Stick Aim | StickPuckEngageDistance | 3m | Puck farther than this → write neutral angle (no active aim) |
+| Stick Aim | StickEngageMaxAngle | 90° | Puck beyond this angle off bot's forward → neutral (forward-hemisphere only) |
 | Debug | ShowDebugMarker | true | Spawn yellow pole at HomePosition |
 | Debug | DebugMarkerColor | yellow | Pole color |
 
@@ -232,15 +291,26 @@ With multiple defenders converging at once, the player's options narrow:
 
 1. **`ZoneRadius` 16 → 20.** ✅ Done (2026-05-14) — LD/RD only, per-position default in spawner. Forwards stay at 16m. Adjacent zones now overlap enough that an attacker entering the C's zone is also inside LD's and RD's, so all three engage simultaneously.
 2. **Chase has to be reactive to cuts.** ✅ Done (2026-05-14) — `DetectChaseCut` runs on the same dual-EMA + dot-product machinery as `ChaserAI`. On detect, `UpdateChaseSlide` fires a slide burst (released on duration OR re-alignment). State is fully separate from the patrol pulse-crouch.
-3. **Predictive aim during chase.** Still open. Lead the target's velocity slightly with a magnitude cap (`MaxLeadAsDistRatio` trick from `ChaserAI`) to avoid the 180° pivot bug. The defender currently aims at the target's *current* position — adding lead would let the bot meet the cut instead of trailing it. Pair well with the cut-slide that's now in place.
-4. **Different chase angles per defender.** Deferred — user flagged as potentially overkill. The "team brain" idea: when multiple defenders engage one target, the lead defender on the player's cut side anticipates the cut while the trailing defender stays passive / covers the cut-back. Promising but adds cross-bot coordination state.
-5. **Faster initial chase acceleration.** Still open. Options unchanged from the original writeup: one-shot velocity nudge at chase-start, higher patrol min speed, or rely on the new cut-slide to handle the worst case.
+3. **Solve back-turned chase entry.** ✅ Done (2026-05-14, third pass) — two-part fix. (a) `ZoneFacingExpansion` grows the effective zone radius linearly with the bot's turned-away angle so chase triggers earlier when more runway is needed. (b) `PivotEngageAngle`/`PivotReleaseAngle` add a held-crouch turnaround phase at chase entry when the bot is facing significantly away. Released on alignment or safety cap. The two compose: the expansion buys the time the pivot consumes.
+4. **Predictive aim during chase.** ✅ Done (2026-05-14, fourth pass) — ported the chaser's lead-pursuit math (predicted velocity blends raw velocity with facing direction, lead time scales with distance, magnitude capped to prevent phantom-pivot). The defender now meets the player at the intercept instead of trailing.
+5. **Different chase angles per defender.** Deferred — user flagged as potentially overkill. The "team brain" idea: when multiple defenders engage one target, the lead defender on the player's cut side anticipates the cut while the trailing defender stays passive / covers the cut-back. Promising but adds cross-bot coordination state.
+6. **Faster initial chase acceleration.** Still open. Options unchanged from the original writeup: one-shot velocity nudge at chase-start, higher patrol min speed, or rely on the cut-slide and pivot to handle the worst case.
+7. **Mirror/Predict engagement modes.** Still open. The chaser has a per-bot random side commit (`PredictLateralOffset`) which makes it occasionally beat the player to a side instead of just heading to the lead point. For defenders this could be valuable but introduces variance — a defender that commits wrong is worse than one that just intercepts. Try after team-brain (item 5) if needed.
 
 ### Suggested order (revised)
 
 1. ✅ Bump LD/RD `ZoneRadius` to 20m.
 2. ✅ Add cut detection + slide-pivot to chase.
-3. **Playtest.** Pure-knob and pure-port changes; the right next move depends on how the bots feel now. If they're still trailing on cuts, add predictive lead (item 3). If they're still losing the first race off the line, add chase-start nudge (item 5). If single defenders are still beatable in isolation, revisit the team-brain coordination idea (item 4).
+3. ✅ Facing-based zone expansion + chase-entry pivot phase.
+4. ✅ Lead pursuit in chase (predicted velocity, clamped lead).
+5. ✅ Stick aim gate on bot-to-puck distance (visual fix, not efficacy).
+6. **Playtest.** With lead pursuit now in place, slow lateral glides shouldn't whiff. If single defenders are still beatable in isolation despite simultaneous engagement, revisit team-brain coordination (item 5 above). If the first stride off chase-start still loses the race, add an initial velocity nudge (item 6). Mirror/Predict (item 7) is the last lever before adding new structural ideas.
+
+### Tuning notes for the new pivot system
+
+- `PivotEngageAngle` (90°) is the threshold for "needs a real turn." Below 90°, normal chase turn input is enough and the speed cost of a crouch-hold isn't worth it. Bump up (e.g. 110°) if pivots are firing too often; bump down (e.g. 70°) if you see the bot losing time on big-but-sub-90° turns.
+- `PivotReleaseAngle` (25°) per user's stated preference — not 0°. The last few degrees of alignment come almost free during normal forward skating; we just need to be close before committing to forward thrust.
+- `ZoneFacingExpansion` (6m) is the load-bearing magnitude. Sized to roughly the distance the attacker travels (8 m/s × ~0.75s) during the pivot — enough to ensure the bot is aligned before contact. If pivots release too late (attacker already past), bump expansion higher. If the zones now feel "leaky" with defenders chasing from too far, lower it.
 
 ## Future work beyond efficacy
 
