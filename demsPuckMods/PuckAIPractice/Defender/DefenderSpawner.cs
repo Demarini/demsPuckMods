@@ -64,44 +64,82 @@ namespace PuckAIPractice.Defender
             ai.ControlledPlayer = player;
             ai.TargetClientId = targetClientId;
 
-            // PlayerPosition transforms are faceoff positions — forwards at center ice,
-            // defensemen at the blue line. The home position is offset from spawn by:
-            //   (a) pull back along -forward by HomePullBackDistance (toward own net)
-            //   (b) tuck inward toward the rink centerline by HomeTuckInDistance
-            // PatrolAxis runs lateral across the rink (perpendicular to spawn-forward),
-            // so the bot's body aligns with the patrol stroke and only pivots when it
-            // transitions to chase.
-            //
-            // Inward direction is derived from C's faceoff position on the same team —
-            // C is on the rink centerline, so the lateral displacement from C to this
-            // spawn position points away from center. Tucking opposite that = inward.
-            // For C itself the displacement is ~0 so the inward offset collapses, which
-            // is correct: C is already centered horizontally.
-            Vector3 spawnPos = position.transform.position;
-            Vector3 spawnForward = position.transform.forward;
-            spawnForward.y = 0f;
-            if (spawnForward.sqrMagnitude > 0.0001f) spawnForward.Normalize();
-            else spawnForward = Vector3.forward;
-
-            Vector3 patrolAxis = Vector3.Cross(Vector3.up, spawnForward).normalized;
-
-            Vector3 inwardDir = Vector3.zero;
-            var centerPos = FindPosition(team, "C");
-            if (centerPos != null)
+            // Per-position defaults for home offset. Defensemen sit deeper (closer to
+            // own net, near the slot); forwards sit at the blue line; C is centered.
+            // Wings tuck the same as defensemen so adjacent positions' zones overlap
+            // with a clean margin. Tunable in the Inspector if needed.
+            string posUpper = positionName.ToUpperInvariant();
+            switch (posUpper)
             {
-                Vector3 toCenter = centerPos.transform.position - spawnPos;
-                toCenter.y = 0f;
-                float lateralComp = Vector3.Dot(toCenter, patrolAxis);
-                if (Mathf.Abs(lateralComp) > 0.1f)
-                {
-                    inwardDir = patrolAxis * Mathf.Sign(lateralComp);
-                }
+                case "LD":
+                case "RD":
+                    ai.HomePullBackDistance = 18f;
+                    ai.HomeTuckInDistance = 4f;
+                    break;
+                case "LW":
+                case "RW":
+                    ai.HomePullBackDistance = 15f;
+                    ai.HomeTuckInDistance = 4f;
+                    break;
+                case "C":
+                    ai.HomePullBackDistance = 15f;
+                    ai.HomeTuckInDistance = 0f;
+                    break;
             }
 
+            // Use rink-axis-aligned directions, NOT position.transform.forward.
+            // Puck's PlayerPosition transforms face the faceoff dot at an angle (e.g.
+            // LD's forward is (0.57, 0, 0.82), not pure +Z), so pulling back along
+            // -spawnForward drags the bot diagonally outward toward the boards.
+            //
+            // Assumptions about Puck's rink (consistent with observed spawn coords):
+            //   - Lateral axis = world X (rink width). Centerline at X=0.
+            //   - Length axis = world Z (rink length).
+            //   - Each team spawns on its own side, so sign(spawnPos.z) tells us
+            //     which Z direction is "toward own goal" (= backward).
+            Vector3 spawnPos = position.transform.position;
+
+            Vector3 backwardDir;
+            if (Mathf.Abs(spawnPos.z) > 0.1f)
+            {
+                backwardDir = new Vector3(0f, 0f, Mathf.Sign(spawnPos.z));
+            }
+            else
+            {
+                // C spawns ~Z=0; fall back to a teammate's position to determine direction.
+                var reference = FindPosition(team, "LD") ?? FindPosition(team, "RD")
+                              ?? FindPosition(team, "LW") ?? FindPosition(team, "RW");
+                if (reference != null && Mathf.Abs(reference.transform.position.z) > 0.1f)
+                {
+                    backwardDir = new Vector3(0f, 0f, Mathf.Sign(reference.transform.position.z));
+                }
+                else
+                {
+                    backwardDir = Vector3.back;
+                }
+            }
+            Vector3 attackDir = -backwardDir;
+
+            // Inward direction = toward X=0 lateral centerline.
+            Vector3 inwardDir = Vector3.zero;
+            if (Mathf.Abs(spawnPos.x) > 0.1f)
+            {
+                inwardDir = new Vector3(-Mathf.Sign(spawnPos.x), 0f, 0f);
+            }
+
+            // Angled patrol axis: mostly inward, with a 25° tilt toward the attack
+            // direction so the patrol stroke funnels attackers toward the center.
+            const float patrolAxisAngleDeg = 25f;
+            float angleRad = patrolAxisAngleDeg * Mathf.Deg2Rad;
+            Vector3 angledAxis = (inwardDir.sqrMagnitude > 0.0001f)
+                ? (inwardDir * Mathf.Cos(angleRad) + attackDir * Mathf.Sin(angleRad)).normalized
+                : Vector3.right;  // C: no inward direction, use pure lateral X
+
             ai.HomePosition = spawnPos
-                - spawnForward * ai.HomePullBackDistance
+                + backwardDir * ai.HomePullBackDistance
                 + inwardDir * ai.HomeTuckInDistance;
-            ai.PatrolAxis = patrolAxis;
+            ai.PatrolAxis = angledAxis;
+            ai.ThreatDirection = attackDir;
 
             DefenderRegistry.Register(new DefenderRegistry.Entry
             {
@@ -111,7 +149,7 @@ namespace PuckAIPractice.Defender
                 ClientId = clientId,
             });
 
-            Debug.Log($"[Defender] Spawned at {team} {positionName} (clientId={clientId}, home={ai.HomePosition})");
+            Debug.Log($"[Defender] Spawned at {team} {positionName} (clientId={clientId}, spawnPos={spawnPos}, backward={backwardDir}, inward={inwardDir}, axis={ai.PatrolAxis}, home={ai.HomePosition})");
             return player;
         }
 
