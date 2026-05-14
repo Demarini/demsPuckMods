@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 
-namespace PuckAIPractice.Defender
+namespace PuckAIPractice.Chaser
 {
-    public static class DefenderRegistry
+    public static class ChaserRegistry
     {
         public class Entry
         {
@@ -12,9 +12,9 @@ namespace PuckAIPractice.Defender
             public ulong ClientId;
         }
 
-        // 9_000_000+ to stay clear of Chaser bots (8M+), goalie bots (7777777/7777778),
-        // and replay-copy offset (real id + 1337).
-        private const ulong ClientIdBase = 9000000UL;
+        // Clear of the goalie-bot range (7777777/7777778) and clear of the
+        // replay-copy offset (real clientId + 1337). 8_000_000+ is safe.
+        private const ulong ClientIdBase = 8000000UL;
         private static ulong nextClientId = ClientIdBase;
 
         private static readonly Dictionary<ulong, Entry> byClientId = new Dictionary<ulong, Entry>();
@@ -25,7 +25,7 @@ namespace PuckAIPractice.Defender
 
         public static void Unregister(ulong clientId) => byClientId.Remove(clientId);
 
-        public static bool IsDefenderClientId(ulong clientId) => byClientId.ContainsKey(clientId);
+        public static bool IsChaserClientId(ulong clientId) => byClientId.ContainsKey(clientId);
 
         public static Entry GetByClientId(ulong clientId) =>
             byClientId.TryGetValue(clientId, out var e) ? e : null;

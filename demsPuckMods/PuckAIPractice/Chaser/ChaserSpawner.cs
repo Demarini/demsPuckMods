@@ -5,9 +5,9 @@ using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 
-namespace PuckAIPractice.Defender
+namespace PuckAIPractice.Chaser
 {
-    public static class DefenderSpawner
+    public static class ChaserSpawner
     {
         public static Player Spawn(PlayerTeam team, string positionName, ulong targetClientId)
         {
@@ -16,37 +16,37 @@ namespace PuckAIPractice.Defender
             var playerManager = PlayerManager.Instance;
             if (playerManager == null)
             {
-                Debug.LogWarning("[Defender] PlayerManager not ready");
+                Debug.LogWarning("[Chaser] PlayerManager not ready");
                 return null;
             }
 
             var position = FindPosition(team, positionName);
             if (position == null)
             {
-                Debug.LogWarning($"[Defender] No PlayerPosition named '{positionName}' on team {team}");
+                Debug.LogWarning($"[Chaser] No PlayerPosition named '{positionName}' on team {team}");
                 return null;
             }
             if (position.IsClaimed)
             {
-                Debug.LogWarning($"[Defender] {team} {positionName} already claimed by {position.ClaimedByPlayer?.Username.Value}");
+                Debug.LogWarning($"[Chaser] {team} {positionName} already claimed by {position.ClaimedByPlayer?.Username.Value}");
                 return null;
             }
 
             var prefab = Traverse.Create(playerManager).Field("playerPrefab").GetValue<Player>();
             if (prefab == null)
             {
-                Debug.LogError("[Defender] playerPrefab missing");
+                Debug.LogError("[Chaser] playerPrefab missing");
                 return null;
             }
 
             var playerObj = UnityEngine.Object.Instantiate(prefab);
             var netObj = playerObj.GetComponent<NetworkObject>();
-            var clientId = DefenderRegistry.AllocateClientId();
+            var clientId = ChaserRegistry.AllocateClientId();
 
             netObj.SpawnWithOwnership(clientId, true);
 
             var player = playerObj.GetComponent<Player>();
-            player.Username.Value = $"demDef_{positionName}";
+            player.Username.Value = $"demBot_{positionName}";
             player.Number.Value = 99;
             player.CustomizationState.Value = new PlayerCustomizationState();
             player.Server_SetGameState(team: team, role: PlayerRole.Attacker);
@@ -60,50 +60,11 @@ namespace PuckAIPractice.Defender
 
             ApplyDefaultAppearance(player);
 
-            var ai = player.gameObject.AddComponent<DefenderAI>();
+            var ai = player.gameObject.AddComponent<ChaserAI>();
             ai.ControlledPlayer = player;
             ai.TargetClientId = targetClientId;
 
-            // PlayerPosition transforms are faceoff positions — forwards at center ice,
-            // defensemen at the blue line. The home position is offset from spawn by:
-            //   (a) pull back along -forward by HomePullBackDistance (toward own net)
-            //   (b) tuck inward toward the rink centerline by HomeTuckInDistance
-            // PatrolAxis runs lateral across the rink (perpendicular to spawn-forward),
-            // so the bot's body aligns with the patrol stroke and only pivots when it
-            // transitions to chase.
-            //
-            // Inward direction is derived from C's faceoff position on the same team —
-            // C is on the rink centerline, so the lateral displacement from C to this
-            // spawn position points away from center. Tucking opposite that = inward.
-            // For C itself the displacement is ~0 so the inward offset collapses, which
-            // is correct: C is already centered horizontally.
-            Vector3 spawnPos = position.transform.position;
-            Vector3 spawnForward = position.transform.forward;
-            spawnForward.y = 0f;
-            if (spawnForward.sqrMagnitude > 0.0001f) spawnForward.Normalize();
-            else spawnForward = Vector3.forward;
-
-            Vector3 patrolAxis = Vector3.Cross(Vector3.up, spawnForward).normalized;
-
-            Vector3 inwardDir = Vector3.zero;
-            var centerPos = FindPosition(team, "C");
-            if (centerPos != null)
-            {
-                Vector3 toCenter = centerPos.transform.position - spawnPos;
-                toCenter.y = 0f;
-                float lateralComp = Vector3.Dot(toCenter, patrolAxis);
-                if (Mathf.Abs(lateralComp) > 0.1f)
-                {
-                    inwardDir = patrolAxis * Mathf.Sign(lateralComp);
-                }
-            }
-
-            ai.HomePosition = spawnPos
-                - spawnForward * ai.HomePullBackDistance
-                + inwardDir * ai.HomeTuckInDistance;
-            ai.PatrolAxis = patrolAxis;
-
-            DefenderRegistry.Register(new DefenderRegistry.Entry
+            ChaserRegistry.Register(new ChaserRegistry.Entry
             {
                 Player = player,
                 Team = team,
@@ -111,37 +72,37 @@ namespace PuckAIPractice.Defender
                 ClientId = clientId,
             });
 
-            Debug.Log($"[Defender] Spawned at {team} {positionName} (clientId={clientId}, home={ai.HomePosition})");
+            Debug.Log($"[Chaser] Spawned at {team} {positionName} (clientId={clientId})");
             return player;
         }
 
         public static int DespawnAll()
         {
-            DefenderRegistry.CleanupDestroyed();
-            var entries = DefenderRegistry.All.ToList();
+            ChaserRegistry.CleanupDestroyed();
+            var entries = ChaserRegistry.All.ToList();
             int count = 0;
             foreach (var e in entries)
             {
                 if (DespawnEntry(e)) count++;
             }
-            Debug.Log($"[Defender] Cleared {count} defender bot(s)");
+            Debug.Log($"[Chaser] Cleared {count} chaser bot(s)");
             return count;
         }
 
         public static bool DespawnAt(string positionName)
         {
-            DefenderRegistry.CleanupDestroyed();
-            var entry = DefenderRegistry.All
+            ChaserRegistry.CleanupDestroyed();
+            var entry = ChaserRegistry.All
                 .FirstOrDefault(e => string.Equals(e.PositionName, positionName, StringComparison.OrdinalIgnoreCase));
             if (entry == null)
             {
-                Debug.Log($"[Defender] No defender bot at position {positionName}");
+                Debug.Log($"[Chaser] No chaser bot at position {positionName}");
                 return false;
             }
             return DespawnEntry(entry);
         }
 
-        private static bool DespawnEntry(DefenderRegistry.Entry e)
+        private static bool DespawnEntry(ChaserRegistry.Entry e)
         {
             if (!NetworkManager.Singleton.IsServer) return false;
             try
@@ -158,14 +119,14 @@ namespace PuckAIPractice.Defender
                     PlayerManager.Instance.RemovePlayer(e.Player);
                     e.Player.NetworkObject.Despawn(true);
                 }
-                DefenderRegistry.Unregister(e.ClientId);
-                Debug.Log($"[Defender] Despawned at {e.Team} {e.PositionName}");
+                ChaserRegistry.Unregister(e.ClientId);
+                Debug.Log($"[Chaser] Despawned at {e.Team} {e.PositionName}");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Defender] Despawn error: {ex.Message}");
-                DefenderRegistry.Unregister(e.ClientId);
+                Debug.LogError($"[Chaser] Despawn error: {ex.Message}");
+                ChaserRegistry.Unregister(e.ClientId);
                 return false;
             }
         }

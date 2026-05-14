@@ -48,9 +48,12 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AI\ChaserAI.cs" />
     <Compile Include="AI\GoalieAI.cs" />
     <Compile Include="AI\GoalieSettings.cs" />
+    <Compile Include="Chaser\ChaserAI.cs" />
+    <Compile Include="Chaser\ChaserCommandPatch.cs" />
+    <Compile Include="Chaser\ChaserRegistry.cs" />
+    <Compile Include="Chaser\ChaserSpawner.cs" />
     <Compile Include="Config\ModConfig.cs" />
     <Compile Include="Defender\DefenderAI.cs" />
     <Compile Include="Defender\DefenderCommandPatch.cs" />
