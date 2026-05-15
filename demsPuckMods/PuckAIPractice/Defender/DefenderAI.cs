@@ -74,7 +74,7 @@ namespace PuckAIPractice.Defender
         [Header("Debug")]
         // Spawn a non-collider visual marker at HomePosition (tracks the dynamic
         // shifted home each frame). Useful while tuning shift/anchor offsets.
-        public bool ShowDebugMarker = true;
+        public bool ShowDebugMarker = false;
         public Color DebugMarkerColor = Color.yellow;
 
         [Header("Patrol Movement")]

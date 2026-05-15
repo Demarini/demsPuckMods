@@ -1,4 +1,6 @@
 using HarmonyLib;
+using PuckAIPractice.Singletons;
+using PuckAIPractice.Utilities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -48,7 +50,7 @@ namespace PuckAIPractice.Defender
             var player = playerObj.GetComponent<Player>();
             player.Username.Value = $"demDef_{positionName}";
             player.Number.Value = 99;
-            player.CustomizationState.Value = new PlayerCustomizationState();
+            player.CustomizationState.Value = BotCustomization.BuildFromSettings();
             player.Server_SetGameState(team: team, role: PlayerRole.Attacker);
 
             position.Server_Claim(player);
@@ -58,7 +60,10 @@ namespace PuckAIPractice.Defender
                 position.transform.rotation,
                 PlayerRole.Attacker);
 
-            ApplyDefaultAppearance(player);
+            if (ConfigData.Instance.RandomizeBotAppearance)
+            {
+                player.CustomizationState.Value = BotCustomization.BuildRandom(player);
+            }
 
             var ai = player.gameObject.AddComponent<DefenderAI>();
             ai.ControlledPlayer = player;
@@ -225,33 +230,5 @@ namespace PuckAIPractice.Defender
                     string.Equals(p.Name, name, System.StringComparison.OrdinalIgnoreCase));
         }
 
-        private static void ApplyDefaultAppearance(Player player)
-        {
-            var body = player.PlayerBody;
-            if (body == null) return;
-
-            var mesh = body.PlayerMesh;
-            if (mesh != null)
-            {
-                mesh.SetJerseyID(0, player.Team);
-                mesh.SetNumber(player.Number.Value.ToString());
-                mesh.SetUsername(player.Username.Value.ToString());
-                if (mesh.PlayerHead != null)
-                {
-                    mesh.PlayerHead.SetMustacheID(0);
-                    mesh.PlayerHead.SetFlagID(0);
-                    mesh.PlayerHead.SetHeadgearID(0, player.Role);
-                    mesh.PlayerHead.SetBeardID(0);
-                }
-            }
-
-            if (body.Stick != null && body.Stick.StickMesh != null)
-            {
-                var stickMesh = body.Stick.StickMesh;
-                stickMesh.SetBladeTapeID(0);
-                stickMesh.SetSkinID(0, player.Team);
-                stickMesh.SetShaftTapeID(0);
-            }
-        }
     }
 }

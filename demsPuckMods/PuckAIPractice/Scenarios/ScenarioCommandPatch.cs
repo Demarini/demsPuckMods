@@ -35,7 +35,9 @@ namespace PuckAIPractice.Scenarios
                 return false;
             }
 
-            ScenarioManager.StartByName(first, callerId);
+            var rest = new string[args.Length - 1];
+            System.Array.Copy(args, 1, rest, 0, rest.Length);
+            ScenarioManager.StartByName(first, callerId, rest);
             return false;
         }
     }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using PuckAIPractice.Chaser;
 using PuckAIPractice.Defender;
@@ -15,10 +16,19 @@ namespace PuckAIPractice.Scenarios
         private const float PlayerSpawnAheadOfGoalie = 2.5f;
         // Puck sits just in front of the player's stick reach.
         private const float PuckSpawnAheadOfPlayer = 1.5f;
-        private static readonly string[] DefenderPositions = { "LD", "RD", "C", "LW", "RW" };
+        private static readonly string[] DefaultDefenderPositions = { "LD", "RD", "C", "LW", "RW" };
+        private static readonly HashSet<string> ValidPositions =
+            new HashSet<string>(DefaultDefenderPositions, System.StringComparer.OrdinalIgnoreCase);
 
-        public void Start(ulong callerClientId)
+        public void Start(ulong callerClientId, string[] args)
         {
+            var positions = ResolvePositions(args);
+            if (positions.Length == 0)
+            {
+                Debug.LogWarning("[Scenario:rush] No valid positions to spawn; aborting");
+                return;
+            }
+
             if (!NetworkManager.Singleton.IsServer)
             {
                 Debug.LogWarning("[Scenario:rush] Not server, ignoring");
@@ -68,7 +78,7 @@ namespace PuckAIPractice.Scenarios
             PuckManager.Instance?.Server_SpawnPuck(puckPos, Quaternion.identity, false);
 
             int spawned = 0;
-            foreach (var pos in DefenderPositions)
+            foreach (var pos in positions)
             {
                 var bot = DefenderSpawner.Spawn(botTeam, pos, callerClientId);
                 if (bot == null) continue;
@@ -84,8 +94,35 @@ namespace PuckAIPractice.Scenarios
             }
 
             Debug.Log($"[Scenario:rush] caller={callerClientId} team={callerTeam} botTeam={botTeam} " +
-                      $"playerPos={playerPos} puckPos={puckPos} defenders={spawned}/{DefenderPositions.Length}");
+                      $"playerPos={playerPos} puckPos={puckPos} defenders={spawned}/{positions.Length} " +
+                      $"positions=[{string.Join(",", positions)}]");
         }
+
+        // Parses the optional position list. Empty args = spawn the full default formation.
+        // Preserves the user's input order, dedupes, and warns on unrecognized tokens
+        // while still spawning the recognized ones.
+        private static string[] ResolvePositions(string[] args)
+        {
+            if (args == null || args.Length == 0) return DefaultDefenderPositions;
+
+            var result = new List<string>(args.Length);
+            var seen = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            foreach (var raw in args)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) continue;
+                var token = raw.Trim().ToUpperInvariant();
+                if (!ValidPositions.Contains(token))
+                {
+                    Debug.LogWarning($"[Scenario:rush] Ignoring unknown position '{raw}' (valid: LW, C, RW, LD, RD)");
+                    continue;
+                }
+                if (!seen.Add(token)) continue;
+                result.Add(token);
+            }
+            return result.ToArray();
+        }
+
+        public void Tick(float dt) { }
 
         public void Stop()
         {

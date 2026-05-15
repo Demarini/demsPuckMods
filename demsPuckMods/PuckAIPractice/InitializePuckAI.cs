@@ -14,6 +14,7 @@ using static UnityEngine.EventSystems.EventTrigger;
 using PuckAIPractice.Config;
 using PuckAIPractice.Singletons;
 using PuckAIPractice.AI;
+using PuckAIPractice.Scenarios;
 namespace PuckAIPractice
 {
     public class InitializePuckAI : IPuckPlugin
@@ -28,6 +29,8 @@ namespace PuckAIPractice
                 GoalieRunner.Initialize();
                 PuckAIPractice.Config.ModConfig.Initialize();
                 DetectPositions.Create();
+                ScenarioInputListener.Create();
+                GauntletHud.Create();
                 ConfigData.Load();
                 Goalies.GoaliesAreRunning = true;
                 GoalieSettings.InstanceBlue.ApplyDifficulty(ConfigData.Instance.BlueGoalieDefaultDifficulty);

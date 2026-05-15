@@ -2,6 +2,7 @@
 using PuckAIPractice.AI;
 using PuckAIPractice.GameModes;
 using PuckAIPractice.Patches;
+using PuckAIPractice.Singletons;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -69,36 +70,11 @@ namespace PuckAIPractice.Utilities
             player.Username.Value = $"demBot_Chaser";
             player.Server_SetGameState(team: team, role: role);
             player.Number.Value = 7;
-            player.CustomizationState.Value = new PlayerCustomizationState();
+            player.CustomizationState.Value = BotCustomization.BuildFromSettings();
             FakePlayerRegistry.Register(player, team);
             var position = GetNextUnclaimedPosition(player.Team, player.Role);
             if (position != null)
                 position.Server_Claim(player);
-            var body = player.PlayerBody;
-            if (body != null)
-            {
-                var mesh = body.PlayerMesh;
-                if (mesh != null)
-                {
-                    mesh.SetJerseyID(0, player.Team);
-                    mesh.SetNumber(player.Number.Value.ToString());
-                    mesh.SetUsername(player.Username.Value.ToString());
-                    if (mesh.PlayerHead != null)
-                    {
-                        mesh.PlayerHead.SetMustacheID(0);
-                        mesh.PlayerHead.SetFlagID(0);
-                        mesh.PlayerHead.SetHeadgearID(0, player.Role);
-                        mesh.PlayerHead.SetBeardID(0);
-                    }
-                }
-                if (body.Stick != null && body.Stick.StickMesh != null)
-                {
-                    var stickMesh = body.Stick.StickMesh;
-                    stickMesh.SetBladeTapeID(0);
-                    stickMesh.SetSkinID(0, player.Team);
-                    stickMesh.SetShaftTapeID(0);
-                }
-            }
             //Goalies.GoaliesAreRunning = true;
             //NetworkBehaviourSingleton<UIScoreboard>.Instance.RemovePlayer(player);
             //NetworkBehaviourSingleton<PlayerManager>.Instance.RemovePlayer(player);
@@ -143,7 +119,7 @@ namespace PuckAIPractice.Utilities
             player.Username.Value = $"demBot{team.ToString()}_{(team == PlayerTeam.Red ? GoalieSettings.InstanceRed.Difficulty.ToString() : GoalieSettings.InstanceBlue.Difficulty.ToString())}";
             player.Server_SetGameState(team: team, role: role);
             player.Number.Value = 7;
-            player.CustomizationState.Value = new PlayerCustomizationState();
+            player.CustomizationState.Value = BotCustomization.BuildFromSettings();
             var position = GetNextUnclaimedPosition(player.Team, player.Role);
             //player.PlayerPosition = new PlayerPosition();
             //player.PlayerPosition.Name = "G";
@@ -172,6 +148,11 @@ namespace PuckAIPractice.Utilities
                 playerObj.Server_SpawnCharacter(new Vector3(0, 0, 0), new Quaternion(0, 0, 0, 0), role);
             }
 
+            if (ConfigData.Instance.RandomizeBotAppearance)
+            {
+                player.CustomizationState.Value = BotCustomization.BuildRandom(player);
+            }
+
             var body = player.PlayerBody;
             if (body != null)
             {
@@ -181,29 +162,6 @@ namespace PuckAIPractice.Utilities
                 player.transform.position = adjustedPosition;
                 body.Rigidbody.position = adjustedPosition;
                 body.Rigidbody.isKinematic = true;
-
-                var mesh = body.PlayerMesh;
-                if (mesh != null)
-                {
-                    mesh.SetJerseyID(0, player.Team);
-                    mesh.SetNumber(player.Number.Value.ToString());
-                    mesh.SetUsername(player.Username.Value.ToString());
-                    if (mesh.PlayerHead != null)
-                    {
-                        mesh.PlayerHead.SetMustacheID(0);
-                        mesh.PlayerHead.SetFlagID(0);
-                        mesh.PlayerHead.SetHeadgearID(0, player.Role);
-                        mesh.PlayerHead.SetBeardID(0);
-                    }
-                }
-
-                if (body.Stick != null && body.Stick.StickMesh != null)
-                {
-                    var stickMesh = body.Stick.StickMesh;
-                    stickMesh.SetBladeTapeID(0);
-                    stickMesh.SetSkinID(0, player.Team);
-                    stickMesh.SetShaftTapeID(0);
-                }
             }
 
             var ai = player.NetworkObject.gameObject.AddComponent<GoalieAI>();
@@ -279,8 +237,14 @@ namespace PuckAIPractice.Utilities
                 Debug.Log($"[BotSpawning] Despawn error: {ex.Message}");
             }
         }
+        // Scenarios (e.g. gauntlet) set this to skip the auto goalie-spawn
+        // tick — DetectPositions runs every 10 frames and would otherwise
+        // refill any empty goalie slot a second after we despawned them.
+        public static bool SuppressAutoGoalieSpawn { get; set; } = false;
+
         public static void DetectOpenGoalAndSpawnBot()
         {
+            if (SuppressAutoGoalieSpawn) return;
             FakePlayerRegistry.CleanupDestroyed();
 
             List<Player> players = PlayerManager.Instance.GetPlayers(false);
