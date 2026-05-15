@@ -26,6 +26,11 @@ namespace PuckAIPractice.Utilities
         // 0.34 ≈ cos(70°) — body is more than 70° off vertical.
         private const float TiltLockDot = 0.34f;
 
+        // Minimum KeepUpright.Balance — high enough that hover physics
+        // doesn't collapse (causing the pogo-stick glitch) but low enough
+        // that slide-cuts still get lean.
+        private const float BalanceFloor = 1f;
+
         private PlayerBody _body;
 
         public void Bind(PlayerBody body)
@@ -43,11 +48,16 @@ namespace PuckAIPractice.Utilities
             _body.HasFallen = false;
             _body.HasSlipped = false;
 
-            // Keep the upright force at max. KeepUpright will physically
-            // pull the body back to vertical after any disturbance.
-            if (_body.KeepUpright != null)
+            // Clamp KeepUpright.Balance to a floor instead of slamming to 1.
+            // Slide-cuts work by letting balance drop briefly (slip → lean
+            // → sharp turn), so we let it dip — but if it gets too low the
+            // hover physics collapse and the body pogo-glitches when
+            // partially fallen. 0.5 is the sweet spot: enough lean room
+            // for sharper slide turns, enough upright force to never let
+            // the bot end up flopped on the ice.
+            if (_body.KeepUpright != null && _body.KeepUpright.Balance < BalanceFloor)
             {
-                _body.KeepUpright.Balance = 1f;
+                _body.KeepUpright.Balance = BalanceFloor;
             }
 
             // Emergency lock only — let normal lean happen.
