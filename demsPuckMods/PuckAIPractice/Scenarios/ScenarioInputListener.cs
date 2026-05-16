@@ -48,6 +48,10 @@ namespace PuckAIPractice.Scenarios
 
             if (IsChatFocused()) return;
 
+            // The IsServer check above is already a de-facto host gate: only
+            // the host runs this listener on the server side. Remote clients
+            // never see this key fire.
+
             var control = keyboard[key];
             if (control != null && control.wasPressedThisFrame)
             {

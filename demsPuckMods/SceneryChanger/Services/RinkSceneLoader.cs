@@ -490,8 +490,8 @@ namespace SceneryChanger.Services
                 return;
             }
 
-            audioSource.volume = info.musicVolume;
             SceneryAudioState.MusicVolume = info.musicVolume;
+            SceneryChanger.Behaviors.UpdateAudioSources.ApplyVolumesNow();
             Debug.Log($"[SceneLoader] Loading music: '{musicFile}' volume={info.musicVolume:F2}");
             CoroutineRunner.Instance.StartCoroutine(LoadAndPlayAudio(audioSource, musicFile, "music"));
         }

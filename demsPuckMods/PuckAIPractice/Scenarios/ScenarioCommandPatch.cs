@@ -1,5 +1,6 @@
 using HarmonyLib;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace PuckAIPractice.Scenarios
@@ -12,6 +13,18 @@ namespace PuckAIPractice.Scenarios
         {
             var command = (string)message["command"];
             var callerId = (ulong)message["clientId"];
+
+            // /scenario gauntlet would tear down the rink in a live match —
+            // host-only for both /scenario and /sr.
+            bool isOurCommand = (command == "/sr") || (command == "/scenario");
+            if (!isOurCommand) return true;
+
+            var nm = NetworkManager.Singleton;
+            if (nm == null || !nm.IsServer || callerId != nm.LocalClientId)
+            {
+                Debug.Log($"[Scenario] '{command}' ignored: caller {callerId} is not host");
+                return false;
+            }
 
             if (command == "/sr")
             {

@@ -1,4 +1,5 @@
 using HarmonyLib;
+using SceneryChanger.Behaviors;
 using SceneryChanger.Services;
 using System;
 using System.Collections.Generic;
@@ -31,8 +32,7 @@ namespace SceneryChanger.Patches
                     SetVolume(args, clientId, "Music", "/slMusicVolume",
                         v => {
                             SceneryAudioState.MusicVolume = v;
-                            if (SceneryAudioState.MusicSource != null)
-                                SceneryAudioState.MusicSource.volume = v;
+                            UpdateAudioSources.ApplyVolumesNow();
                         },
                         () => SceneryAudioState.MusicVolume);
                     return false;

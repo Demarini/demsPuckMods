@@ -10,9 +10,35 @@ namespace MOTD.Config
     public static class MOTDConfig
     {
         public static string ConfigPath { get; private set; } // <moddir>/MOTDConfig.local.json
+        public static string ModDir { get; private set; }     // directory containing this mod's DLL
 
         private const string PrimaryName = "MOTDConfig.json";       // workshop-managed (may be overwritten)
         private const string LocalName = "MOTDConfig.local.json"; // our persistent copy (we use this)
+        private const string BundledMotdName = "MOTD.json";       // bundled default MOTD content
+
+        // Resolves the MOTD.json path the server should send. Prefers the admin-configured
+        // JsonFileLocation; falls back to the bundled MOTD.json next to the DLL so the mod
+        // works out of the box on a fresh install.
+        public static string ResolveMotdJsonPath()
+        {
+            try
+            {
+                var configured = ConfigData.Instance?.JsonFileLocation;
+                if (!string.IsNullOrEmpty(configured) && File.Exists(configured))
+                    return configured;
+
+                if (!string.IsNullOrEmpty(ModDir))
+                {
+                    string bundled = Path.Combine(ModDir, BundledMotdName);
+                    if (File.Exists(bundled)) return bundled;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[MOTD] ResolveMotdJsonPath error: {ex.Message}");
+            }
+            return null;
+        }
 
         public static void Initialize()
         {
@@ -20,6 +46,7 @@ namespace MOTD.Config
             {
                 string assemblyPath = Assembly.GetExecutingAssembly().Location;
                 string modDir = Path.GetDirectoryName(assemblyPath) ?? ".";
+                ModDir = modDir;
                 Debug.Log($"[MOTD] Mod assembly path: {assemblyPath}");
                 Debug.Log($"[MOTD] Using mod dir: {modDir}");
 

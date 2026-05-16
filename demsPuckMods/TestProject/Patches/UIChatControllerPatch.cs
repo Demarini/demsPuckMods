@@ -1,4 +1,5 @@
 using HarmonyLib;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using MOTD.Behaviors;
+using MOTD.Config;
 using MOTD.Models;
 using TestProject.Utilities;
 using UnityEngine;
@@ -18,9 +20,16 @@ namespace MOTD.Patches
     [HarmonyPatch]
     static class UIChat_WelcomePatch
     {
-        public static string MOTDCommand = "!MOTD ";
-        const string ChunkPrefix = "!MOTDC:";
-        const int MaxPayloadBytes = 450;
+        // Protocol: each non-final MOTD chunk goes out as "!MOTD <data>"; the final (or
+        // only) chunk goes out as "!ENDMOTD <data>". Receivers append "!MOTD" chunks to a
+        // buffer and process+clear on "!ENDMOTD". This keeps the stream identifiable even
+        // when other mods' chat messages interleave between our chunks.
+        public const string MotdPrefix = "!MOTD ";
+        public const string EndMotdPrefix = "!ENDMOTD ";
+
+        // Server caps chat at 512 bytes per message; stay well under that to allow for
+        // any wrapping the chat pipeline adds and any UTF-8 multi-byte payload chars.
+        const int MaxMessageBytes = 450;
 
         // Per-join the original re-read MOTD JSON from disk + parsed it + chunked it. With many
         // joiners this stalled the server tick; cache the prebuilt outgoing messages keyed on the
@@ -45,9 +54,7 @@ namespace MOTD.Patches
 
             try
             {
-                // ConfigData.Instance lazy-loads once; do NOT call Load() per join — it does
-                // synchronous disk I/O + JSON parse on the main thread.
-                var path = ConfigData.Instance.JsonFileLocation;
+                var path = MOTDConfig.ResolveMotdJsonPath();
                 if (string.IsNullOrEmpty(path)) return;
 
                 var messages = GetCachedMessages(path);
@@ -70,7 +77,7 @@ namespace MOTD.Patches
             }
         }
 
-        // Returns the cached chunked MOTD messages, rebuilding only if the source file changed
+        // Returns the cached MOTD messages, rebuilding only if the source file changed
         // since last call. Returns null if the file is missing or the doc fails to parse.
         static string[] GetCachedMessages(string path)
         {
@@ -94,24 +101,44 @@ namespace MOTD.Patches
                 return null;
             }
 
-            string fullMessage = MOTDCommand + json;
-            string[] messages;
-            if (Encoding.UTF8.GetByteCount(fullMessage) <= MaxPayloadBytes)
+            // Minify before chunking. Pretty-printed JSON contains \n/\r which trips
+            // any server-side chat patch that splits multi-line system messages by
+            // newline (e.g. the nametag mod's ChatManagerSendSystemStringToClientsPatch),
+            // shredding each chunk into many partial messages.
+            string compactJson;
+            try { compactJson = JObject.Parse(json).ToString(Newtonsoft.Json.Formatting.None); }
+            catch (Exception ex)
             {
-                messages = new[] { fullMessage };
+                Debug.LogWarning($"[MOTD] Failed to minify JSON, falling back to raw: {ex.Message}");
+                compactJson = json;
             }
-            else
-            {
-                var chunks = ChunkString(json, MaxPayloadBytes - 16); // reserve bytes for "!MOTDC:XX:XX "
-                messages = new string[chunks.Count];
-                for (int i = 0; i < chunks.Count; i++)
-                    messages[i] = $"{ChunkPrefix}{i + 1}:{chunks.Count} {chunks[i]}";
-                Debug.Log($"[MOTD] Cached {chunks.Count} MOTD chunks for {path}");
-            }
+
+            string[] messages = BuildMessages(compactJson);
+            Debug.Log($"[MOTD] Cached {messages.Length} MOTD message(s) for {path}");
 
             _cachedMessages = messages;
             _cachedJsonPath = path;
             _cachedJsonMtime = mtime;
+            return messages;
+        }
+
+        // Splits json into one or more wire messages using the !MOTD / !ENDMOTD scheme.
+        // Single-fit MOTDs ship as one "!ENDMOTD <json>" message — receivers treat that
+        // as both first and last, processing immediately.
+        static string[] BuildMessages(string json)
+        {
+            string single = EndMotdPrefix + json;
+            if (Encoding.UTF8.GetByteCount(single) <= MaxMessageBytes)
+                return new[] { single };
+
+            int endPrefixBytes = Encoding.UTF8.GetByteCount(EndMotdPrefix);
+            int dataBudget = MaxMessageBytes - endPrefixBytes;
+
+            var chunks = ChunkString(json, dataBudget);
+            var messages = new string[chunks.Count];
+            for (int i = 0; i < chunks.Count - 1; i++)
+                messages[i] = MotdPrefix + chunks[i];
+            messages[chunks.Count - 1] = EndMotdPrefix + chunks[chunks.Count - 1];
             return messages;
         }
 
@@ -143,9 +170,7 @@ namespace MOTD.Patches
         [HarmonyPatch]
         public static class UIChat_AddChatMessage_MotdPatch
         {
-            static string _chunkBuffer = "";
-            static int _expectedChunks = 0;
-            static int _receivedChunks = 0;
+            static readonly StringBuilder _buffer = new StringBuilder();
 
             static MethodBase TargetMethod()
             {
@@ -155,67 +180,36 @@ namespace MOTD.Patches
                     .FirstOrDefault(m => m.Name == "AddChatMessage" && m.GetParameters().Length == 3);
             }
 
+            // Priority.First ensures we observe the raw ChatMessage text before any other
+            // chat-patching mod (e.g. nametag/colorizer mods) can mutate chatMessage.Content
+            // and prepend wrappers like "<color=...>Server</color>: " that would break our
+            // exact-prefix check.
             [HarmonyPrefix]
+            [HarmonyPriority(Priority.First)]
             static bool Prefix(UIChat __instance, ChatMessage chatMessage)
             {
                 if (chatMessage == null) return true;
 
                 var text = GetMessageText(chatMessage);
 
-                // Handle chunked MOTD messages
-                if (text.StartsWith(ChunkPrefix))
+                // Final (or only) chunk — append and process.
+                if (text.StartsWith(EndMotdPrefix, StringComparison.Ordinal))
                 {
-                    HandleChunk(text);
+                    _buffer.Append(text.Substring(EndMotdPrefix.Length));
+                    string json = _buffer.ToString();
+                    _buffer.Length = 0;
+                    ProcessMotdJson(json);
                     return false;
                 }
 
-                // Handle single (small) MOTD messages
-                if (!text.StartsWith(MOTDCommand, StringComparison.OrdinalIgnoreCase)) return true;
-
-                string json = text.Substring(MOTDCommand.Length);
-                ProcessMotdJson(json);
-                return false;
-            }
-
-            static void HandleChunk(string text)
-            {
-                try
+                // Intermediate chunk — append and swallow.
+                if (text.StartsWith(MotdPrefix, StringComparison.Ordinal))
                 {
-                    // Parse "!MOTDC:1:3 <data>"
-                    int afterPrefix = ChunkPrefix.Length;
-                    int secondColon = text.IndexOf(':', afterPrefix);
-                    int space = text.IndexOf(' ', secondColon);
-                    if (secondColon < 0 || space < 0) return;
-
-                    int chunkNum = int.Parse(text.Substring(afterPrefix, secondColon - afterPrefix));
-                    int totalChunks = int.Parse(text.Substring(secondColon + 1, space - secondColon - 1));
-                    string data = text.Substring(space + 1);
-
-                    if (chunkNum == 1)
-                    {
-                        _chunkBuffer = "";
-                        _expectedChunks = totalChunks;
-                        _receivedChunks = 0;
-                    }
-
-                    _chunkBuffer += data;
-                    _receivedChunks++;
-
-                    Debug.Log($"[MOTD] Received chunk {chunkNum}/{totalChunks}");
-
-                    if (_receivedChunks >= _expectedChunks)
-                    {
-                        Debug.Log($"[MOTD] All {_expectedChunks} chunks received, processing MOTD");
-                        ProcessMotdJson(_chunkBuffer);
-                        _chunkBuffer = "";
-                        _expectedChunks = 0;
-                        _receivedChunks = 0;
-                    }
+                    _buffer.Append(text.Substring(MotdPrefix.Length));
+                    return false;
                 }
-                catch (Exception e)
-                {
-                    Debug.LogWarning($"[MOTD] HandleChunk error: {e}");
-                }
+
+                return true;
             }
 
             static void ProcessMotdJson(string json)
@@ -274,8 +268,6 @@ namespace MOTD.Patches
                     return "MOTD";
                 }
             }
-
-            static bool IsMotdCommand(string s) => s.ToUpper().Contains("!MOTD");
         }
 
         static string GetMessageText(ChatMessage chatMessage)

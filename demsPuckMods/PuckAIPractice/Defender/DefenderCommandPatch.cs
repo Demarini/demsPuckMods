@@ -1,7 +1,7 @@
 using HarmonyLib;
-using PuckAIPractice.Patches;
 using System;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 namespace PuckAIPractice.Defender
@@ -20,7 +20,18 @@ namespace PuckAIPractice.Defender
             var command = (string)message["command"];
             if (command != "/defender") return true;
 
-            Debug.Log($"[Defender] /defender received (practiceMode={PracticeModeDetector.IsPracticeMode})");
+            // Host-only — random clients shouldn't be able to spawn bots on
+            // a real server. The host (LocalClientId on the server) is the
+            // only one with permission.
+            var nm = NetworkManager.Singleton;
+            var senderId = (ulong)message["clientId"];
+            if (nm == null || !nm.IsServer || senderId != nm.LocalClientId)
+            {
+                Debug.Log($"[Defender] /defender ignored: caller {senderId} is not host");
+                return false;
+            }
+
+            Debug.Log("[Defender] /defender received");
 
             var args = (string[])message["args"];
             if (args == null || args.Length < 1)

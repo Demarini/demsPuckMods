@@ -29,10 +29,9 @@ namespace SceneryChanger.Behaviors
         bool _goalGaveUp;
 
         static System.Type _smType;
-        static System.Reflection.PropertyInfo _globalVolProp;
-        static System.Reflection.PropertyInfo _ambientVolProp;
+        static System.Reflection.FieldInfo _globalVolField;
+        static System.Reflection.FieldInfo _ambientVolField;
         static bool _smReflectionInit;
-        Object _cachedSM;
 
         public static void Install()
         {
@@ -105,34 +104,47 @@ namespace SceneryChanger.Behaviors
                 }
             }
 
+            ApplyVolumesInternal();
+
+            // If sources get destroyed later, we'll resume lookup unless we've given up.
+            if (ambientSource == null && _ambientGaveUp) { /* intentionally do nothing */ }
+            if (goalNoise == null && _goalGaveUp) { /* intentionally do nothing */ }
+        }
+
+        // Force an immediate volume re-apply (e.g. when a chat command changes a mod-set volume).
+        // Skips the missing-source lookup; the next throttled tick handles that.
+        public static void ApplyVolumesNow()
+        {
+            if (_instance == null) return;
+            _instance.ApplyVolumesInternal();
+        }
+
+        void ApplyVolumesInternal()
+        {
             // Apply volumes only if the sources exist
-            // Use reflection to avoid MonoBehaviourSingleton<SettingsManager> generic inflation TLE
+            // Use reflection to avoid MonoBehaviourSingleton<SettingsManager> generic inflation TLE.
+            // GlobalVolume/AmbientVolume are static fields on SettingsManager — read with GetValue(null).
             if (!_smReflectionInit)
             {
                 _smReflectionInit = true;
                 _smType = AccessTools.TypeByName("SettingsManager");
                 if (_smType != null)
                 {
-                    _globalVolProp = AccessTools.Property(_smType, "GlobalVolume");
-                    _ambientVolProp = AccessTools.Property(_smType, "AmbientVolume");
+                    _globalVolField = AccessTools.Field(_smType, "GlobalVolume");
+                    _ambientVolField = AccessTools.Field(_smType, "AmbientVolume");
                 }
             }
-            if (_smType == null || _globalVolProp == null || _ambientVolProp == null) return;
-            if (!_cachedSM)
-                _cachedSM = Object.FindFirstObjectByType(_smType);
-            if (!_cachedSM) return;
+            if (_smType == null || _globalVolField == null || _ambientVolField == null) return;
 
-            float globalVol = (float)_globalVolProp.GetValue(_cachedSM, null);
-            float ambientVol = (float)_ambientVolProp.GetValue(_cachedSM, null);
+            float globalVol = (float)_globalVolField.GetValue(null);
+            float ambientVol = (float)_ambientVolField.GetValue(null);
             float audioMultiplier = globalVol * ambientVol;
             if (ambientSource != null)
                 ambientSource.volume = audioMultiplier * defaultAmbient;
             if (goalNoise != null)
                 goalNoise.volume = audioMultiplier * SceneryAudioState.GoalCrowdNoiseVolume;
-
-            // If sources get destroyed later, we'll resume lookup unless we've given up.
-            if (ambientSource == null && _ambientGaveUp) { /* intentionally do nothing */ }
-            if (goalNoise == null && _goalGaveUp) { /* intentionally do nothing */ }
+            if (SceneryAudioState.MusicSource != null)
+                SceneryAudioState.MusicSource.volume = SceneryAudioState.MusicVolume * globalVol;
         }
 
         // Optional: call this if you want to try again after giving up (e.g., after a scene loads).

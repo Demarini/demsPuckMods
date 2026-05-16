@@ -1,0 +1,71 @@
+{
+  "version": 3,
+  "modalDoc": {
+    "title": "<size=44><color=#FFD966>Welcome to <b>Puck</b></color></size><br><size=20>Season 3</size>",
+    "richText": "<b>Welcome!</b><br/><br/>• Rule 1: Be cool.<br/>• Rule 2: Don’t be not cool.<br/>• Rule 3: No ginting when there are no bots!<br/>• Rule 4: Please use your common sense. Obviously no racism or anything like that. Don’t be an idiot.<br/>• Rule 5: Fun banter is cool, but don’t take it too far and be an asshole.<br/>• Rule 6: Don’t be mean to new players; you were new too at one point.<br/>• Rule 7: Games are supposed to be fun, so have fun!<br/>",
+    "bannerImageUrl": "https://i.imgur.com/8Jn7s7d.png",
+    "panelImageUrl": "https://i.imgur.com/EDZAWoV.png",
+    "panelWidthPercent": 60,
+    "panelHeightPercent": 50,
+    "closeDelaySeconds": 5,
+    "blockEscDuringDelay": true,
+    "blockClickOutsideDuringDelay": true,
+    "buttons": [
+      {
+        "name": "Discord",
+        "url": "https://discord.com/invite/AZDBj6XsGg",
+        "iconUrl": "https://i.imgur.com/aBwErG8.png",
+        "height": 40,
+        "aspect": 2,
+        "corner": 8,
+        "marginRight": 8,
+        "pad": 0,
+        "choke": 5,
+        "background": "",
+        "backgroundActive": "",
+        "backgroundHover": ""
+      },
+	  {
+        "name": "Discord2",
+        "url": "https://discord.com/invite/AZDBj6XsGg",
+        "iconUrl": "https://i.imgur.com/aBwErG8.png",
+        "height": 40,
+        "aspect": 2,
+        "corner": 8,
+        "marginRight": 8,
+        "pad": 0,
+        "choke": 5,
+        "background": "",
+        "backgroundActive": "",
+        "backgroundHover": ""
+      },
+      {
+        "name": "Website",
+        "url": "https://www.reddit.com",
+        "iconUrl": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/11/Test-Logo.svg/2560px-Test-Logo.svg.png",
+        "height": 40,
+        "aspect": 2.18315018315,
+        "corner": 8,
+        "marginRight": 8,
+        "pad": 0,
+        "choke": 10,
+        "background": "",
+        "backgroundActive": "",
+        "backgroundHover": ""
+      }
+    ]
+  },
+  "theme": {
+    "overlay": "#8C000000",
+    "panel": "#1A1A1F",
+    "text": "#FFFFFF",
+    "mutedText": "#C7C7CC",
+    "button": "#383A3D",
+    "buttonHover": "#474A4F",
+    "buttonActive": "#2E3033",
+    "toggleBox": "#616469",
+    "toggleCheck": "#FFFFFF",
+    "scrollbarTrack": "#1F2023",
+    "scrollbarThumb": "#4D5157"
+  }
+}
